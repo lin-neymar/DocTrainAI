@@ -1,0 +1,39 @@
+# 密钥与本地环境。提交 .env.example，不提交真实配置
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.python-version
+
+# 上传的原始文件。目录由 FILE_STORAGE_DIR 指向 server/storage
+server/storage/*
+!server/storage/.gitkeep
+
+# 前端依赖与构建产物
+node_modules/
+web/dist/
+web/dist-ssr/
+*.tsbuildinfo
+.vite/
+
+# 日志与本地数据库
+*.log
+logs/
+*.sqlite3
+dump.rdb
+
+# 系统与编辑器
+.DS_Store
+.idea/
+*.swp
