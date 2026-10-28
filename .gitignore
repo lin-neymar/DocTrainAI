@@ -1,20 +1,29 @@
-# 密钥与本地环境。提交 .env.example，不提交真实配置
+# 密钥与本地环境。只提交 .env.example，不提交真实配置
 .env
 .env.*
 !.env.example
 
-# Python
+# Python 虚拟环境与字节码
 .venv/
 venv/
+**/.venv/
 __pycache__/
+**/__pycache__/
 *.py[cod]
+*$py.class
+*.so
+
+# 测试 / 静态检查 / 类型检查缓存
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .coverage
 htmlcov/
+coverage.xml
 *.egg-info/
 .python-version
+dist/
+build/
 
 # 上传的原始文件。目录由 FILE_STORAGE_DIR 指向 server/storage
 server/storage/*
@@ -27,13 +36,24 @@ web/dist-ssr/
 *.tsbuildinfo
 .vite/
 
-# 日志与本地数据库
+# 日志与本地数据库文件
 *.log
 logs/
 *.sqlite3
 dump.rdb
 
+# 本地 Docker 覆盖（个人机器差异，不提交）
+compose.override.yaml
+docker-compose.override.yml
+
 # 系统与编辑器
 .DS_Store
 .idea/
 *.swp
+*.swo
+*~
+
+# 证书与密钥文件
+*.pem
+*.key
+*.p12
