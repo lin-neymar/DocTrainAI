@@ -15,6 +15,7 @@ from app.database import SessionLocal
 from app.models.system.dept import Dept
 from app.models.system.permission import Permission
 from app.models.system.role import Role
+from app.models.system.user import User
 
 
 def test_database_select_one() -> None:
@@ -51,3 +52,14 @@ def test_permission_and_role_tables_queryable() -> None:
 
     assert perm_count is not None and perm_count >= 0
     assert role_count is not None and role_count >= 0
+
+
+def test_user_table_queryable() -> None:
+    """B2：user 表已迁移且 ORM 可访问（空表 count=0 即可）。"""
+    try:
+        with SessionLocal() as session:
+            user_count = session.scalar(select(func.count()).select_from(User))
+    except Exception as exc:
+        pytest.skip(f"PostgreSQL 或迁移未就绪，请 alembic upgrade head: {exc}")
+
+    assert user_count is not None and user_count >= 0
