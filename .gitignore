@@ -46,7 +46,9 @@ dump.rdb
 compose.override.yaml
 docker-compose.override.yml
 
-# 系统与编辑器
+# 系统与编辑器（IDE 个人/本机偏好，不纳入版本库）
+.vscode/
+.cursor/
 .DS_Store
 .idea/
 *.swp
