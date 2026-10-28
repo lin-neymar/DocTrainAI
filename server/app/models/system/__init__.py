@@ -5,5 +5,7 @@ Alembic 生成迁移时需要「import 到所有模型」，否则 autogenerate 
 """
 
 from app.models.system.dept import Dept
+from app.models.system.permission import Permission
+from app.models.system.role import Role, RolePermission
 
-__all__ = ["Dept"]
+__all__ = ["Dept", "Permission", "Role", "RolePermission"]

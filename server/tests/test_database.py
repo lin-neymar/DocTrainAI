@@ -13,6 +13,8 @@ from sqlalchemy import func, select, text
 
 from app.database import SessionLocal
 from app.models.system.dept import Dept
+from app.models.system.permission import Permission
+from app.models.system.role import Role
 
 
 def test_database_select_one() -> None:
@@ -36,3 +38,16 @@ def test_dept_table_exists_and_queryable() -> None:
 
     assert count is not None
     assert count >= 0
+
+
+def test_permission_and_role_tables_queryable() -> None:
+    """B1：permission / role 表已迁移且 ORM 可访问（空表 count=0 即可）。"""
+    try:
+        with SessionLocal() as session:
+            perm_count = session.scalar(select(func.count()).select_from(Permission))
+            role_count = session.scalar(select(func.count()).select_from(Role))
+    except Exception as exc:
+        pytest.skip(f"PostgreSQL 或迁移未就绪，请 alembic upgrade head: {exc}")
+
+    assert perm_count is not None and perm_count >= 0
+    assert role_count is not None and role_count >= 0
