@@ -12,7 +12,9 @@ import pytest
 from sqlalchemy import func, select, text
 
 from app.database import SessionLocal
+from app.models.system.course import Course
 from app.models.system.dept import Dept
+from app.models.system.doc import Doc
 from app.models.system.permission import Permission
 from app.models.system.role import Role
 from app.models.system.user import User
@@ -63,3 +65,16 @@ def test_user_table_queryable() -> None:
         pytest.skip(f"PostgreSQL 或迁移未就绪，请 alembic upgrade head: {exc}")
 
     assert user_count is not None and user_count >= 0
+
+
+def test_doc_and_course_tables_queryable() -> None:
+    """B3/B4：doc / course 表已迁移且 ORM 可访问（空表 count=0 即可）。"""
+    try:
+        with SessionLocal() as session:
+            doc_count = session.scalar(select(func.count()).select_from(Doc))
+            course_count = session.scalar(select(func.count()).select_from(Course))
+    except Exception as exc:
+        pytest.skip(f"PostgreSQL 或迁移未就绪，请 alembic upgrade head: {exc}")
+
+    assert doc_count is not None and doc_count >= 0
+    assert course_count is not None and course_count >= 0
