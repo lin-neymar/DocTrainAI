@@ -1,0 +1,7 @@
+# ruff 静态检查配置。提交前在 server/ 运行：ruff check .
+target-version = "py311"
+line-length = 100
+
+[lint]
+# E/F：语法与基础错误；I：import 排序
+select = ["E", "F", "I"]

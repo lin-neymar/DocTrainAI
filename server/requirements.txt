@@ -1,0 +1,12 @@
+# DocTrainAI 后端 Python 依赖清单（安装目标：server/.venv）。
+# 新增包须符合 SERVER_SPEC 白名单，并人工确认后再写入。
+fastapi          # Web 框架：路由、依赖注入、OpenAPI 文档
+uvicorn          # ASGI 服务器：本地运行 app.main:app
+pydantic-settings  # 从环境变量与根目录 .env 读取配置
+sqlalchemy       # ORM（G4 database.py、模型与查询）
+alembic          # 数据库结构迁移（G5 起）
+psycopg[binary]  # PostgreSQL 驱动（含 libpq，macOS 本地无需单独装 Postgres 客户端）
+pgvector         # 阶段 1 仅驱动占位；阶段 2 启用向量列时再使用
+pytest           # 自动化测试
+httpx            # TestClient 与 HTTP 调用（测试/后续接口调试）
+ruff             # 代码风格与静态检查
