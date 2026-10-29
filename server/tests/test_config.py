@@ -23,3 +23,11 @@ def test_jwt_settings_loaded_from_env() -> None:
 def test_cors_origins_parsed() -> None:
     """D-C：CORS_ORIGINS 能解析为至少一个 Origin。"""
     assert len(settings.cors_origin_list) >= 1
+
+
+def test_file_upload_settings() -> None:
+    """F0：上传目录、大小上限与允许扩展名可读。"""
+    assert settings.file_max_mb > 0
+    assert settings.file_storage_path.is_absolute()
+    assert "pdf" in settings.allowed_extension_list
+    assert "md" in settings.allowed_extension_list

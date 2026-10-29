@@ -8,7 +8,10 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# 仓库根 DocTrainAI/（.env、compose.yaml 同级）
 ROOT_DIR = Path(__file__).resolve().parents[2]
+# server/（uvicorn 工作目录；相对路径的 FILE_STORAGE_DIR 以此为基准）
+SERVER_DIR = Path(__file__).resolve().parents[1]
 
 
 class Settings(BaseSettings):
@@ -32,11 +35,35 @@ class Settings(BaseSettings):
     # D-C：允许跨域访问 API 的前端 Origin，英文逗号分隔（Vite 默认 http://localhost:5173）
     cors_origins: str = "http://localhost:5173"
 
+    # F0：文档原文件存储与上传限制（SERVER_SPEC 默认 pdf/md、20MB）
+    # 相对路径相对于 server/；也可写成绝对路径
+    file_storage_dir: str = "storage"
+    file_max_mb: int = 20
+    # 英文逗号分隔，不含点号，如 pdf,md
+    allowed_extensions: str = "pdf,md"
+
     @property
     # 实现：把 CORS_ORIGINS 拆成 Origin 列表
     def cors_origin_list(self) -> list[str]:
         """解析 CORS_ORIGINS → CORSMiddleware 的 allow_origins 列表。"""
         return [part.strip() for part in self.cors_origins.split(",") if part.strip()]
+
+    @property
+    # 实现：解析上传允许的扩展名列表（小写、无点）
+    def allowed_extension_list(self) -> list[str]:
+        return [
+            part.strip().lower().lstrip(".")
+            for part in self.allowed_extensions.split(",")
+            if part.strip()
+        ]
+
+    @property
+    # 实现：得到原文件存储目录的绝对 Path
+    def file_storage_path(self) -> Path:
+        path = Path(self.file_storage_dir)
+        if path.is_absolute():
+            return path
+        return (SERVER_DIR / path).resolve()
 
 
 settings = Settings()
