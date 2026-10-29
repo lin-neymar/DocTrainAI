@@ -1,10 +1,15 @@
 /// <reference types="vite/client" />
 
-// 让 TS / Volar 识别 `import xxx from '*.vue'`（含 `@/views/...vue`）
-declare module '*.vue' {
-  import type { DefineComponent } from 'vue'
-  const component: DefineComponent<object, object, unknown>
-  export default component
+import 'vue-router'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** 无需登录（登录页等） */
+    public?: boolean
+    /** 业务页所需权限码；无此字段则仅要求已登录 */
+    permission?: string
+    title?: string
+  }
 }
 
 interface ImportMetaEnv {

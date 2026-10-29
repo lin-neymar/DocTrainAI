@@ -1,0 +1,5 @@
+{
+  "typescript.tsdk": "web/node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "vue.server.includeLanguages": ["vue", "typescript", "javascript"]
+}

@@ -1,0 +1,38 @@
+/**
+ * W1 主题：深蓝主色 + 浅色后台底。
+ * 侧栏白底在 W2 Layout 落地；此处先定 CSS 变量供登录页与后续复用。
+ */
+:root {
+  --dt-color-primary: #1f4b7a;
+  --dt-color-primary-hover: #163a5f;
+  --dt-color-primary-soft: #e8eef5;
+  --dt-bg-page: #f5f7fa;
+  --dt-bg-card: #ffffff;
+  --dt-text: #303133;
+  --dt-text-secondary: #606266;
+  --dt-border: #e4e7ed;
+
+  /* 覆盖 Element Plus 主色，使按钮/链接统一深蓝 */
+  --el-color-primary: var(--dt-color-primary);
+  --el-color-primary-light-3: #4a6f9a;
+  --el-color-primary-light-5: #7a99b8;
+  --el-color-primary-light-7: #a9c0d5;
+  --el-color-primary-light-8: #c4d3e2;
+  --el-color-primary-light-9: #e8eef5;
+  --el-color-primary-dark-2: var(--dt-color-primary-hover);
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+  color: var(--dt-text);
+  background: var(--dt-bg-page);
+  font-family:
+    'PingFang SC',
+    'Microsoft YaHei',
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
