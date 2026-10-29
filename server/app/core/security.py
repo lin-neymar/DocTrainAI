@@ -25,6 +25,11 @@ from app.core.exceptions import UnauthorizedError
 _ALGORITHM = "HS256"
 
 
+# 实现：明文密码 → bcrypt 哈希（创建用户 / 重置密码用）
+def hash_password(plain: str) -> str:
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
 # 实现：校验明文密码是否匹配 bcrypt 哈希
 def verify_password(plain: str, password_hash: str) -> bool:
     """验证明文密码是否与数据库存储的 bcrypt hash 匹配。
