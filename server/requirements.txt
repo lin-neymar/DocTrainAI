@@ -8,6 +8,7 @@ alembic          # 数据库结构迁移（G5 起）
 psycopg[binary]  # PostgreSQL 驱动（含 libpq，macOS 本地无需单独装 Postgres 客户端）
 pgvector         # 阶段 1 仅驱动占位；阶段 2 启用向量列时再使用
 bcrypt           # C seed / 登录：用户密码哈希（SERVER_SPEC 白名单）
+pyjwt            # D-A：Access Token 签发与校验（SERVER_SPEC 白名单）
 pytest           # 自动化测试
 httpx            # TestClient 与 HTTP 调用（测试/后续接口调试）
 ruff             # 代码风格与静态检查

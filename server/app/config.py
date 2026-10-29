@@ -24,5 +24,10 @@ class Settings(BaseSettings):
     init_admin_username: str
     init_admin_password: str
 
+    # D-A（D1）：JWT 签发与校验；JWT_SECRET 必须足够随机，生产环境务必更换
+    jwt_secret: str
+    # 有效分钟数，默认 480（8 小时）；可被环境变量 JWT_EXPIRE_MINUTES 覆盖
+    jwt_expire_minutes: int = 480
+
 
 settings = Settings()
