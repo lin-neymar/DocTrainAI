@@ -1,7 +1,10 @@
-"""E：数据范围 service（E-B 部门；E-C 文档见后续函数）。
+"""E：数据范围 service（E-B 部门 + E-C 文档）。
 
-get_accessible_dept_ids：用户管理、部门树、重置密码等「能碰哪些部门」。
-只认 permission 码 data:scope:all，禁止用角色 code 判断超管。
+- get_accessible_dept_ids：能碰哪些部门
+- get_visible_doc_ids：能当作「存在且可读」的文档 id（详情/下载/阶段 2 检索前过滤）
+
+只认 permission 码，禁止用角色 code 判断超管。
+签名固定，阶段 2 检索也必须先调用 get_visible_doc_ids。
 """
 
 from __future__ import annotations
@@ -13,9 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.system.dept import Dept
+from app.models.system.doc import Doc
 from app.services.system import auth_service
 
 _PERM_SCOPE_ALL = "data:scope:all"
+_PERM_DOC_READ = "doc:read"
 
 
 def _dept_subtree_ids(session: Session, root_id: uuid.UUID) -> list[uuid.UUID]:
@@ -59,3 +64,33 @@ def get_accessible_dept_ids(session: Session, user_id: uuid.UUID) -> list[uuid.U
     if _PERM_SCOPE_ALL in permission_codes:
         return _all_active_dept_ids(session)
     return _dept_subtree_ids(session, user.dept_id)
+
+
+def get_visible_doc_ids(session: Session, user_id: uuid.UUID) -> list[uuid.UUID]:
+    """返回当前用户可见的未删除文档 id（SERVER_SPEC 签名，阶段 2 不改）。
+
+    判断顺序（必须按此顺序，勿打乱）：
+      1. 没有 doc:read → []（连列表都不该看到制度文档）
+      2. 有 data:scope:all → 全部未删文档
+      3. 否则 → doc.dept_id 落在 get_accessible_dept_ids 集合内
+
+    F 阶段：详情/下载时若 doc_id 不在本列表 → 返回 404（不泄露「是否存在」）。
+    """
+    permission_codes = auth_service.list_permission_codes_for_user(session, user_id)
+    if _PERM_DOC_READ not in permission_codes:
+        return []
+
+    if _PERM_SCOPE_ALL in permission_codes:
+        stmt = select(Doc.id).where(Doc.is_deleted.is_(False)).order_by(Doc.id)
+        return list(session.scalars(stmt).all())
+
+    accessible_dept_ids = get_accessible_dept_ids(session, user_id)
+    if not accessible_dept_ids:
+        return []
+
+    stmt = (
+        select(Doc.id)
+        .where(Doc.is_deleted.is_(False), Doc.dept_id.in_(accessible_dept_ids))
+        .order_by(Doc.id)
+    )
+    return list(session.scalars(stmt).all())
