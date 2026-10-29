@@ -29,5 +29,13 @@ class Settings(BaseSettings):
     # 有效分钟数，默认 480（8 小时）；可被环境变量 JWT_EXPIRE_MINUTES 覆盖
     jwt_expire_minutes: int = 480
 
+    # D-C：允许跨域访问 API 的前端 Origin，英文逗号分隔（Vite 默认 http://localhost:5173）
+    cors_origins: str = "http://localhost:5173"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        """解析 CORS_ORIGINS → CORSMiddleware 的 allow_origins 列表。"""
+        return [part.strip() for part in self.cors_origins.split(",") if part.strip()]
+
 
 settings = Settings()

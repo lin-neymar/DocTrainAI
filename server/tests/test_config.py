@@ -18,3 +18,8 @@ def test_jwt_settings_loaded_from_env() -> None:
     """D-A（D1）：JWT 密钥非空，过期分钟数为正。"""
     assert settings.jwt_secret.strip()
     assert settings.jwt_expire_minutes > 0
+
+
+def test_cors_origins_parsed() -> None:
+    """D-C：CORS_ORIGINS 能解析为至少一个 Origin。"""
+    assert len(settings.cors_origin_list) >= 1
