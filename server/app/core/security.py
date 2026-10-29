@@ -1,6 +1,6 @@
 """D-A：密码校验与 Access Token（JWT）工具层。
 
-本文件还不暴露 HTTP 接口（那是 D-B）。职责只有两件：
+HTTP 路由在 D-B（app/api/system/auth.py）；本文件只做密码与 JWT 工具。职责：
   1. 登录时：比对用户输入的明文与库里的 bcrypt hash（verify_password）
   2. 登录成功：签发 JWT（create_access_token）；请求进来：解析 JWT（decode_access_token）
 
