@@ -16,9 +16,13 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=ROOT_DIR / ".env", extra="ignore")
 
-    app_env: str = "development" # 开发环境，注解只是提示，不是强制锁类型
+    app_env: str = "development"  # 开发环境，注解只是提示，不是强制锁类型
     # 与 .env 中 DATABASE_URL 对应；G4 database.py 用此连接 PostgreSQL
     database_url: str
+
+    # C1：scripts/seed.py 创建初始管理员时读取；勿在代码里写死生产密码
+    init_admin_username: str
+    init_admin_password: str
 
 
 settings = Settings()
