@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.system.auth import router as auth_router
+from app.api.system.course import router as course_router
 from app.api.system.dept import router as dept_router
 from app.api.system.doc import router as doc_router
 from app.api.system.role import router as role_router
@@ -37,6 +38,8 @@ app.include_router(dept_router, prefix="/api/v1")
 app.include_router(user_router, prefix="/api/v1")
 app.include_router(role_router, prefix="/api/v1")
 app.include_router(doc_router, prefix="/api/v1")
+app.include_router(course_router, prefix="/api/v1")
+
 
 
 
