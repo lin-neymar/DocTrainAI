@@ -1,7 +1,7 @@
 """FastAPI 应用入口。
 
 职责：创建 app 实例、挂载各 APIRouter、注册全局异常处理。
-启动：在 server/ 目录执行 uvicorn app.main:app --reload
+启动：在 server/ 目录执行 1. source .venv/bin/activate 激活虚拟环境 2. uvicorn app.main:app --reload 启动服务器
 """
 
 from fastapi import FastAPI
