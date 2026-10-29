@@ -11,6 +11,7 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/health", summary="健康检查", description="不需要登录，用于确认服务进程可用。")
+# 实现：健康检查（确认进程存活，不查库）
 def health() -> dict:
     # data 只表示进程存活；不查库，避免把 DB 故障误报成「服务 down」
     return success({"status": "up"})

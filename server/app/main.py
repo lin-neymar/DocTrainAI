@@ -32,6 +32,7 @@ app.include_router(auth_router, prefix="/api/v1")
 
 
 @app.get("/", include_in_schema=False)
+# 实现：根路径探活，返回当前 APP_ENV
 def root() -> dict:
     """根路径探活：返回当前 APP_ENV，便于确认配置是否加载。"""
     return success({"app_env": settings.app_env})

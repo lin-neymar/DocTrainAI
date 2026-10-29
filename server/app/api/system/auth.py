@@ -27,6 +27,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     summary="登录",
     description="校验用户名与密码，签发 Access Token。无 Refresh Token。",
 )
+# 实现：登录接口——校验账号密码并返回 access_token
 def login(body: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> dict:
     user = auth_service.authenticate_user(db, body.username, body.password)
     if user is None:
@@ -41,6 +42,7 @@ def login(body: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> dict:
     summary="退出登录",
     description="无状态 JWT：服务端不维护会话表；前端删除 localStorage 中的 token 即可。",
 )
+# 实现：退出接口——校验已登录后返回成功（前端丢弃 token）
 def logout(_current_user: Annotated[User, Depends(get_current_user)]) -> dict:
     return success()
 
@@ -50,6 +52,7 @@ def logout(_current_user: Annotated[User, Depends(get_current_user)]) -> dict:
     summary="当前用户",
     description="刷新页面后带 token 调用，恢复 Pinia 中的用户信息与 permission_codes。",
 )
+# 实现：返回当前用户、部门、角色名与权限码
 def me(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],

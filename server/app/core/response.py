@@ -7,6 +7,7 @@ PROJECT_SPEC 规定成功时：HTTP 200，body 为 { "code": 0, "message": "ok",
 from typing import Any
 
 
+# 实现：构造统一成功响应体 {code:0, message, data}
 def success(data: Any = None, *, message: str = "ok") -> dict[str, Any]:
     """构造统一成功体。
 

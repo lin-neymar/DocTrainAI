@@ -27,6 +27,7 @@ from app.services.system import auth_service
 _bearer = HTTPBearer(auto_error=False)
 
 
+# 实现：从 Bearer Token 解析当前登录用户（失败 → 401）
 def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     db: Annotated[Session, Depends(get_db)],
@@ -42,6 +43,7 @@ def get_current_user(
     return user
 
 
+# 实现：功能权限依赖工厂（缺权限码 → 403）
 def require_permission(perm_code: str):
     """E-A：功能权限依赖工厂（返回一个可被 Depends 使用的依赖函数）。
 
@@ -54,6 +56,7 @@ def require_permission(perm_code: str):
     禁止在这里判断角色名或 role.code（规约：全量范围只看 data:scope:all 码，不看 super_admin）。
     """
 
+    # 实现：校验当前用户是否持有外层指定的权限码
     def _require(
         current_user: Annotated[User, Depends(get_current_user)],
         db: Annotated[Session, Depends(get_db)],

@@ -23,6 +23,7 @@ _PERM_SCOPE_ALL = "data:scope:all"
 _PERM_DOC_READ = "doc:read"
 
 
+# 实现：收集某部门及其全部下级部门 id
 def _dept_subtree_ids(session: Session, root_id: uuid.UUID) -> list[uuid.UUID]:
     """从 root_id 起：自身 + 所有未删除下级（栈遍历，阶段 1 树规模足够）。"""
     rows = session.execute(
@@ -45,11 +46,13 @@ def _dept_subtree_ids(session: Session, root_id: uuid.UUID) -> list[uuid.UUID]:
     return collected
 
 
+# 实现：列出全部未软删部门 id
 def _all_active_dept_ids(session: Session) -> list[uuid.UUID]:
     stmt = select(Dept.id).where(Dept.is_deleted.is_(False)).order_by(Dept.id)
     return list(session.scalars(stmt).all())
 
 
+# 实现：计算用户可访问的部门 id（全公司或本部门及下级）
 def get_accessible_dept_ids(session: Session, user_id: uuid.UUID) -> list[uuid.UUID]:
     """返回当前用户数据范围内的部门 id 列表（SERVER_SPEC 签名，阶段 2 不改）。
 
@@ -66,6 +69,7 @@ def get_accessible_dept_ids(session: Session, user_id: uuid.UUID) -> list[uuid.U
     return _dept_subtree_ids(session, user.dept_id)
 
 
+# 实现：计算用户可见的文档 id（需 doc:read，再按数据范围过滤）
 def get_visible_doc_ids(session: Session, user_id: uuid.UUID) -> list[uuid.UUID]:
     """返回当前用户可见的未删除文档 id（SERVER_SPEC 签名，阶段 2 不改）。
 

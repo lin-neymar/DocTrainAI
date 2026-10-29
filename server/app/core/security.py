@@ -25,6 +25,7 @@ from app.core.exceptions import UnauthorizedError
 _ALGORITHM = "HS256"
 
 
+# 实现：校验明文密码是否匹配 bcrypt 哈希
 def verify_password(plain: str, password_hash: str) -> bool:
     """验证明文密码是否与数据库存储的 bcrypt hash 匹配。
 
@@ -34,6 +35,7 @@ def verify_password(plain: str, password_hash: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), password_hash.encode("utf-8"))
 
 
+# 实现：为用户签发 Access Token（JWT）
 def create_access_token(*, user_id: uuid.UUID) -> str:
     """签发 JWT 字符串，payload 最小化：只放 sub（用户 id）与 exp（过期时间）。
 
@@ -44,6 +46,7 @@ def create_access_token(*, user_id: uuid.UUID) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm=_ALGORITHM)
 
 
+# 实现：解析并校验 JWT，返回 user_id（失败抛 401）
 def decode_access_token(token: str) -> uuid.UUID:
     """校验签名与 exp，成功则返回 user_id。
 

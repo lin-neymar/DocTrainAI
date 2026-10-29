@@ -39,6 +39,7 @@ class Base(DeclarativeBase):
     """
 
 
+# 实现：为每个请求注入数据库 Session，结束时自动关闭
 def get_db() -> Generator[Session, None, None]:
     """供 FastAPI 路由使用：Depends(get_db) 注入 db: Session。
 

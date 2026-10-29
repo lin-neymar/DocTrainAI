@@ -20,11 +20,13 @@ logger = logging.getLogger(__name__)
 _QUIET_HTTP_STATUSES = frozenset({403, 404, 409})
 
 
+# 实现：组装失败响应体（与 success 字段一致）
 def _error_body(*, code: int, message: str, data: Any = None) -> dict[str, Any]:
     """失败响应与成功体字段相同，仅 code ≠ 0。"""
     return {"code": code, "message": message, "data": data}
 
 
+# 实现：注册全局异常处理器，统一转成 {code,message,data}
 def register_exception_handlers(app: FastAPI) -> None:
     """在 main 里创建 app 后、挂载路由前调用一次。
 
@@ -32,6 +34,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     """
 
     @app.exception_handler(AppException)
+    # 实现：处理业务 AppException（401/403/404/409 等）
     def handle_app_exception(_request: Request, exc: AppException) -> JSONResponse:
         # 仅当子类误配成 5xx 时才记日志；常规 401–409 静默返回
         if exc.http_status not in _QUIET_HTTP_STATUSES and exc.http_status >= 500:
@@ -42,6 +45,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(RequestValidationError)
+    # 实现：处理入参校验失败 → 422
     def handle_validation_error(
         _request: Request, exc: RequestValidationError
     ) -> JSONResponse:
@@ -56,6 +60,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(StarletteHTTPException)
+    # 实现：处理框架 HTTPException（如未知路由 404）
     def handle_http_exception(
         _request: Request, exc: StarletteHTTPException
     ) -> JSONResponse:
@@ -81,6 +86,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
+    # 实现：兜底未捕获异常 → 500
     def handle_unexpected_error(_request: Request, exc: Exception) -> JSONResponse:
         # 最后一道防线：不向客户端泄露内部异常信息
         logger.exception("Unhandled exception: %s", exc)

@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     @property
+    # 实现：把 CORS_ORIGINS 拆成 Origin 列表
     def cors_origin_list(self) -> list[str]:
         """解析 CORS_ORIGINS → CORSMiddleware 的 allow_origins 列表。"""
         return [part.strip() for part in self.cors_origins.split(",") if part.strip()]

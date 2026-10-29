@@ -29,11 +29,13 @@ from app.models.system.user import User, UserRole
 from scripts.seed_data import BUILTIN_ROLE_CODES, PERMISSIONS, ROLES, ROOT_DEPT_NAME
 
 
+# 实现：明文密码 → bcrypt 哈希
 def _hash_password(plain: str) -> str:
     """bcrypt 每次 salt 不同，同一明文多次 hash 结果也不同（重跑 seed 会更新 hash 列）。"""
     return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
+# 实现：幂等确保根部门存在
 def ensure_root_dept(session: Session) -> Dept:
     """保证存在且仅复用「未删除的根部门」（parent_id IS NULL）。"""
     root = session.scalar(
@@ -51,6 +53,7 @@ def ensure_root_dept(session: Session) -> Dept:
     return root
 
 
+# 实现：幂等写入阶段 1 权限码
 def ensure_permissions(session: Session) -> dict[str, Permission]:
     """按 code  upsert 权限行；返回 code → ORM，供 sync_role_permissions 用。"""
     by_code: dict[str, Permission] = {}
@@ -71,6 +74,7 @@ def ensure_permissions(session: Session) -> dict[str, Permission]:
     return by_code
 
 
+# 实现：幂等写入内置角色
 def ensure_roles(session: Session) -> dict[str, Role]:
     """按 code upsert 角色行；返回 code → ORM。"""
     by_code: dict[str, Role] = {}
@@ -88,6 +92,7 @@ def ensure_roles(session: Session) -> dict[str, Role]:
     return by_code
 
 
+# 实现：按 seed_data 同步内置角色的权限关联
 def sync_role_permissions(
     session: Session,
     roles_by_code: dict[str, Role],
@@ -108,6 +113,7 @@ def sync_role_permissions(
             session.add(RolePermission(role_id=role.id, permission_id=perm.id))
 
 
+# 实现：幂等创建/更新初始超级管理员
 def ensure_init_admin(session: Session, root_dept: Dept, roles_by_code: dict[str, Role]) -> User:
     """创建或更新 .env 指定的初始管理员：归属根部门，角色 super_admin。"""
     username = settings.init_admin_username.strip()
@@ -146,6 +152,7 @@ def ensure_init_admin(session: Session, root_dept: Dept, roles_by_code: dict[str
     return user
 
 
+# 实现：按固定顺序执行完整种子写入
 def run_seed(session: Session) -> None:
     """单事务内的写入顺序：外键依赖从前到后，不要打乱。"""
     root = ensure_root_dept(session)
@@ -155,6 +162,7 @@ def run_seed(session: Session) -> None:
     ensure_init_admin(session, root, roles)
 
 
+# 实现：命令行入口，跑 seed 并提交事务
 def main() -> int:
     try:
         with SessionLocal() as session:
