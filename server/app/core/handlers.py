@@ -16,8 +16,8 @@ from app.core.exceptions import AppException
 
 logger = logging.getLogger(__name__)
 
-# SERVER_SPEC：403/404/409 等预期拒绝不打印堆栈，避免日志噪音
-_QUIET_HTTP_STATUSES = frozenset({403, 404, 409})
+# SERVER_SPEC：403/404/409/422 等预期拒绝不打印堆栈，避免日志噪音
+_QUIET_HTTP_STATUSES = frozenset({403, 404, 409, 422})
 
 
 # 实现：组装失败响应体（与 success 字段一致）

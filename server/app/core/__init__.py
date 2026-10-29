@@ -11,6 +11,7 @@ from app.core.exceptions import (
     ForbiddenError,
     NotFoundError,
     UnauthorizedError,
+    ValidationFailedError,
 )
 from app.core.handlers import register_exception_handlers
 from app.core.response import success
@@ -21,6 +22,7 @@ __all__ = [
     "ForbiddenError",
     "NotFoundError",
     "UnauthorizedError",
+    "ValidationFailedError",
     "register_exception_handlers",
     "success",
 ]

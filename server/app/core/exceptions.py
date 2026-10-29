@@ -8,6 +8,7 @@
   403 → 40300 已登录但无权限
   404 → 40400 资源不存在
   409 → 40900 业务冲突（重名、有下级时删除等）
+  422 → 42200 参数或校验失败（含上传扩展名/文件头/大小）
 """
 
 
@@ -58,3 +59,11 @@ class ConflictError(AppException):
     http_status = 409
     code = 40900
     default_message = "conflict"
+
+
+class ValidationFailedError(AppException):
+    """业务侧参数/文件校验失败（与 Pydantic 422 同码，便于前端统一处理）。"""
+
+    http_status = 422
+    code = 42200
+    default_message = "validation failed"

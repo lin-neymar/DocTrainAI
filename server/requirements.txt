@@ -2,6 +2,7 @@
 # 新增包须符合 SERVER_SPEC 白名单，并人工确认后再写入。
 fastapi          # Web 框架：路由、依赖注入、OpenAPI 文档
 uvicorn          # ASGI 服务器：本地运行 app.main:app
+python-multipart # F4：POST /docs 的 Form/File 解析（SERVER_SPEC 白名单）
 pydantic-settings  # 从环境变量与根目录 .env 读取配置
 sqlalchemy       # ORM（G4 database.py、模型与查询）
 alembic          # 数据库结构迁移（G5 起）
@@ -12,3 +13,4 @@ pyjwt            # D-A：Access Token 签发与校验（SERVER_SPEC 白名单）
 pytest           # 自动化测试
 httpx            # TestClient 与 HTTP 调用（测试/后续接口调试）
 ruff             # 代码风格与静态检查
+
