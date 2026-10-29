@@ -1,6 +1,5 @@
 /**
- * W1 主题：深蓝主色 + 浅色后台底。
- * 侧栏白底在 W2 Layout 落地；此处先定 CSS 变量供登录页与后续复用。
+ * 主题：深蓝主色 + 浅色后台底；侧栏白底由 AdminLayout 使用 --dt-bg-card。
  */
 :root {
   --dt-color-primary: #1f4b7a;
