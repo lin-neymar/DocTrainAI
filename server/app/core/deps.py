@@ -1,10 +1,12 @@
-"""D-B：FastAPI 依赖注入——从请求头解析当前登录用户。
+"""鉴权依赖（D-B + E-A）。
 
-用法（后续业务路由）：
-    current_user: Annotated[User, Depends(get_current_user)]
+get_current_user：证明「已登录是谁」→ 401
+require_permission：在已登录前提下证明「有没有某个权限码」→ 403
 
-流程：Authorization: Bearer <token> → decode_access_token → 按 id 查未删除用户。
-无头、非 Bearer、token 无效、用户已软删 → UnauthorizedError（40100）。
+业务路由典型写法（F 阶段）：
+    user: Annotated[User, Depends(require_permission("dept:manage"))]
+
+注意：require_permission 只管功能权限，不代替数据范围（E-B/E-C 的 dept/doc 范围函数）。
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import UnauthorizedError
+from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.security import decode_access_token
 from app.database import get_db
 from app.models.system.user import User
@@ -38,3 +40,27 @@ def get_current_user(
         # token 仍有效但用户被软删或不存在 → 同样 401，避免泄露状态
         raise UnauthorizedError()
     return user
+
+
+def require_permission(perm_code: str):
+    """E-A：功能权限依赖工厂（返回一个可被 Depends 使用的依赖函数）。
+
+    执行顺序（FastAPI 自动保证）：
+      1. 先走 get_current_user → 未登录直接 401，不会走到权限判断
+      2. 再从 DB 聚合该用户全部 permission_codes（多角色取并集）
+      3. perm_code 不在集合中 → ForbiddenError（40300）
+
+    perm_code 必须与 seed/permission 表里的 code 完全一致，例如 "dept:manage"。
+    禁止在这里判断角色名或 role.code（规约：全量范围只看 data:scope:all 码，不看 super_admin）。
+    """
+
+    def _require(
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Annotated[Session, Depends(get_db)],
+    ) -> User:
+        codes = auth_service.list_permission_codes_for_user(db, current_user.id)
+        if perm_code not in codes:
+            raise ForbiddenError()
+        return current_user
+
+    return _require
