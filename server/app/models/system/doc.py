@@ -2,7 +2,7 @@
 
 阶段 1 只存身份与文件元数据 + 磁盘上的原文件（storage_key）；不存正文、解析状态、向量。
 dept_id = 归属部门；doc_audience_dept 的每行 dept_id = 可见组织节点（该节点子树可读）。
-阅读算法在 S5 改写 get_visible_doc_ids；与是否挂到课程无关。
+阅读可见由 get_visible_doc_ids（audience 子树）决定；与是否挂到课程无关。
 """
 
 import uuid

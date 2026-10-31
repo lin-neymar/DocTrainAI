@@ -1,7 +1,7 @@
 """培训课程表 ORM（course）、课程-文档关联（course_doc）、可见组织（course_audience_dept）。
 
 课程归属部门；与文档多对多。删课程不删文档；挂接不改变文档可见性。
-阅读规则与文档同构（course:read + audience 子树），算法在 S5 落地。
+阅读规则与文档同构（course:read + get_visible_course_ids）。
 """
 
 import uuid

@@ -1,6 +1,7 @@
-"""文档业务：可见范围内列表/详情、上传落盘、元数据更新、软删除、下载路径。
+"""文档业务：可见范围内列表/详情、上传落盘、元数据与 audience、软删除、下载路径。
 
 读路径一律经 get_visible_doc_ids；不可见一律 404，不泄露是否存在。
+写路径：归属部门受管理范围约束；audience 走 resolve_audience_dept_ids（B1/B3）。
 阶段 1 不解析正文；软删除不删磁盘文件。
 """
 
@@ -9,12 +10,12 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError, ValidationFailedError
 from app.models.system.dept import Dept
-from app.models.system.doc import Doc
+from app.models.system.doc import Doc, DocAudienceDept
 from app.services.system import scope_service
 from app.utils import files as file_utils
 from app.utils.pagination import page_offset
@@ -80,6 +81,15 @@ def _require_doc_in_dept_scope(
     return doc
 
 
+# 实现：整体替换文档 audience 行
+def _replace_audience(
+    session: Session, doc_id: uuid.UUID, audience_dept_ids: list[uuid.UUID]
+) -> None:
+    session.execute(delete(DocAudienceDept).where(DocAudienceDept.doc_id == doc_id))
+    for dept_id in audience_dept_ids:
+        session.add(DocAudienceDept(doc_id=doc_id, dept_id=dept_id))
+
+
 # 实现：分页列出当前用户可见文档
 def list_docs(
     session: Session,
@@ -115,7 +125,7 @@ def get_doc(
     return _to_dict(_require_visible_doc(session, operator_id, doc_id))
 
 
-# 实现：multipart 上传：校验文件 → 落盘 → 写元数据行
+# 实现：multipart 上传：校验文件 → 落盘 → 写元数据 + audience
 def create_doc(
     session: Session,
     *,
@@ -124,12 +134,19 @@ def create_doc(
     dept_id: uuid.UUID,
     filename: str | None,
     content: bytes,
+    audience_dept_ids: list[uuid.UUID] | None = None,
 ) -> dict:
     title = title.strip()
     if not title:
         raise ValidationFailedError("标题不能为空")
 
     _require_dept_in_scope(session, operator_id, dept_id)
+    audience = scope_service.resolve_audience_dept_ids(
+        session,
+        operator_id=operator_id,
+        owner_dept_id=dept_id,
+        audience_dept_ids=audience_dept_ids,
+    )
     ext = file_utils.extension_of(filename)
     original = (filename or f"upload.{ext}").strip()[:255]
     storage_key, size_bytes, sha256 = file_utils.save_upload_bytes(
@@ -148,6 +165,8 @@ def create_doc(
         is_deleted=False,
     )
     session.add(doc)
+    session.flush()
+    _replace_audience(session, doc.id, audience)
     try:
         session.commit()
     except Exception:
@@ -159,7 +178,7 @@ def create_doc(
     return _to_dict(doc)
 
 
-# 实现：更新标题/归属部门（不换文件）；目标与新部门均须在可访问部门内
+# 实现：更新标题/归属/audience；目标与新部门均须在可访问部门内
 def update_doc(
     session: Session,
     *,
@@ -167,6 +186,8 @@ def update_doc(
     doc_id: uuid.UUID,
     title: str | None,
     dept_id: uuid.UUID | None,
+    audience_dept_ids: list[uuid.UUID] | None = None,
+    audience_provided: bool = False,
 ) -> dict:
     doc = _require_doc_in_dept_scope(session, operator_id, doc_id)
 
@@ -176,9 +197,24 @@ def update_doc(
             raise ValidationFailedError("标题不能为空")
         doc.title = cleaned
 
+    owner_changed = False
     if dept_id is not None:
         _require_dept_in_scope(session, operator_id, dept_id)
+        if dept_id != doc.dept_id:
+            owner_changed = True
         doc.dept_id = dept_id
+
+    # 显式传 audience、改归属、或部门官（B3 每次写死本部门）时重写 audience
+    force_own_dept = not scope_service.can_customize_audience(session, operator_id)
+    if audience_provided or owner_changed or force_own_dept:
+        incoming = audience_dept_ids if audience_provided else None
+        audience = scope_service.resolve_audience_dept_ids(
+            session,
+            operator_id=operator_id,
+            owner_dept_id=doc.dept_id,
+            audience_dept_ids=incoming,
+        )
+        _replace_audience(session, doc.id, audience)
 
     session.commit()
     session.refresh(doc)

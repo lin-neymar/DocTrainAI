@@ -1,7 +1,7 @@
 """课程 HTTP 接口。
 
-读：course:read，结果限制在可访问部门。
-写：course:create/update/delete；挂文档：course:attach_doc（文档须可见）。
+读：course:read + get_visible_course_ids（audience 子树）。
+写：course:create/update/delete（管理范围）；挂文档：course:attach_doc（文档须可见）。
 """
 
 from typing import Annotated
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/courses", tags=["courses"])
 @router.get(
     "",
     summary="课程列表",
-    description="分页列出数据范围内的课程。需要 course:read。",
+    description="分页列出当前用户阅读可见的课程。需要 course:read。",
 )
 # 实现：分页列出可见范围内课程
 def list_courses(
@@ -42,7 +42,7 @@ def list_courses(
 @router.get(
     "/{course_id}",
     summary="课程详情",
-    description="部门不在范围内时 404。需要 course:read。",
+    description="不在阅读可见集合时 404。需要 course:read。",
 )
 # 实现：课程详情
 def get_course(

@@ -131,7 +131,7 @@ def test_reject_bad_extension_and_magic(admin_headers: dict[str, str]) -> None:
 
 
 def test_staff_cannot_see_other_branch_doc(admin_headers: dict[str, str]) -> None:
-    """无 data:scope:all 的员工：兄弟部门文档详情应 404（不泄露存在性）。"""
+    """audience 仅兄弟部门 B：员工 A 与根上超管均不可读（B2，无 scope:all 旁路）。"""
     password = "staffpass1"
     with SessionLocal() as session:
         root = session.scalar(
@@ -162,7 +162,7 @@ def test_staff_cannot_see_other_branch_doc(admin_headers: dict[str, str]) -> Non
         session.commit()
         branch_b_id = str(branch_b.id)
 
-    # 管理员把文档挂到兄弟部门 B
+    # 默认 audience=归属 B → 仅 B 子树可读
     created = client.post(
         "/api/v1/docs",
         headers=admin_headers,
@@ -185,6 +185,7 @@ def test_staff_cannot_see_other_branch_doc(admin_headers: dict[str, str]) -> Non
     assert resp.status_code == 404
     assert resp.json()["code"] == 40400
 
-    # 超管仍可读
-    admin_ok = client.get(f"/api/v1/docs/{doc_id}", headers=admin_headers)
-    assert admin_ok.status_code == 200
+    # 超管有 data:scope:all 也不能仅凭该码读到（B2）
+    admin_outside = client.get(f"/api/v1/docs/{doc_id}", headers=admin_headers)
+    assert admin_outside.status_code == 404
+    assert admin_outside.json()["code"] == 40400

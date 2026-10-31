@@ -1,5 +1,7 @@
-"""课程业务：部门范围内 CRUD、整体替换挂接文档。
+"""课程业务：阅读可见列表/详情、部门范围内写、整体替换挂接文档。
 
+读路径：course:read + get_visible_course_ids（方案 B audience）。
+写路径：归属受管理范围约束；audience 走 resolve_audience_dept_ids（B1/B3）。
 挂接不放大文档权限：读文档仍走 get_visible_doc_ids；删课程不删文档。
 """
 
@@ -11,7 +13,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError, ValidationFailedError
-from app.models.system.course import Course, CourseDoc
+from app.models.system.course import Course, CourseAudienceDept, CourseDoc
 from app.models.system.dept import Dept
 from app.models.system.doc import Doc
 from app.services.system import scope_service
@@ -47,6 +49,11 @@ def _accessible_set(session: Session, operator_id: uuid.UUID) -> set[uuid.UUID]:
     return set(scope_service.get_accessible_dept_ids(session, operator_id))
 
 
+# 实现：取阅读可见课程 id 集合
+def _visible_set(session: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
+    return set(scope_service.get_visible_course_ids(session, user_id))
+
+
 # 实现：断言部门存在且在数据范围内
 def _require_dept_in_scope(
     session: Session, operator_id: uuid.UUID, dept_id: uuid.UUID
@@ -58,7 +65,21 @@ def _require_dept_in_scope(
         raise NotFoundError("部门不存在")
 
 
-# 实现：按部门范围取未删课程，否则 404（不泄露越权存在）
+# 实现：按阅读可见取课程，否则 404
+def _require_visible_course(
+    session: Session, operator_id: uuid.UUID, course_id: uuid.UUID
+) -> Course:
+    if course_id not in _visible_set(session, operator_id):
+        raise NotFoundError("课程不存在")
+    course = session.scalar(
+        select(Course).where(Course.id == course_id, Course.is_deleted.is_(False))
+    )
+    if course is None:
+        raise NotFoundError("课程不存在")
+    return course
+
+
+# 实现：按部门范围取未删课程，否则 404（写路径；不泄露越权存在）
 def _require_course_in_scope(
     session: Session, operator_id: uuid.UUID, course_id: uuid.UUID
 ) -> Course:
@@ -68,6 +89,17 @@ def _require_course_in_scope(
     if course is None or course.dept_id not in _accessible_set(session, operator_id):
         raise NotFoundError("课程不存在")
     return course
+
+
+# 实现：整体替换 course_audience_dept
+def _replace_audience(
+    session: Session, course_id: uuid.UUID, audience_dept_ids: list[uuid.UUID]
+) -> None:
+    session.execute(
+        delete(CourseAudienceDept).where(CourseAudienceDept.course_id == course_id)
+    )
+    for dept_id in audience_dept_ids:
+        session.add(CourseAudienceDept(course_id=course_id, dept_id=dept_id))
 
 
 # 实现：整体替换 course_doc；文档须未删且落在 get_visible_doc_ids
@@ -95,7 +127,7 @@ def _replace_docs(
         session.add(CourseDoc(course_id=course_id, doc_id=did))
 
 
-# 实现：分页列出数据范围内的未删课程
+# 实现：分页列出当前用户阅读可见的未删课程
 def list_courses(
     session: Session,
     *,
@@ -103,21 +135,19 @@ def list_courses(
     page: int,
     page_size: int,
 ) -> tuple[list[dict], int]:
-    accessible = list(_accessible_set(session, operator_id))
-    if not accessible:
+    visible = list(_visible_set(session, operator_id))
+    if not visible:
         return [], 0
 
     total = (
         session.scalar(
-            select(func.count())
-            .select_from(Course)
-            .where(Course.is_deleted.is_(False), Course.dept_id.in_(accessible))
+            select(func.count()).select_from(Course).where(Course.id.in_(visible))
         )
         or 0
     )
     rows = session.scalars(
         select(Course)
-        .where(Course.is_deleted.is_(False), Course.dept_id.in_(accessible))
+        .where(Course.id.in_(visible))
         .order_by(Course.created_at.desc(), Course.id)
         .offset(page_offset(page, page_size))
         .limit(page_size)
@@ -125,14 +155,16 @@ def list_courses(
     return [_to_dict(session, c) for c in rows], int(total)
 
 
-# 实现：课程详情
+# 实现：课程详情（阅读不可见 → 404）
 def get_course(
     session: Session, *, operator_id: uuid.UUID, course_id: uuid.UUID
 ) -> dict:
-    return _to_dict(session, _require_course_in_scope(session, operator_id, course_id))
+    return _to_dict(
+        session, _require_visible_course(session, operator_id, course_id)
+    )
 
 
-# 实现：创建课程（可顺带挂空文档列表）
+# 实现：创建课程并写入 audience
 def create_course(
     session: Session,
     *,
@@ -140,11 +172,18 @@ def create_course(
     title: str,
     description: str | None,
     dept_id: uuid.UUID,
+    audience_dept_ids: list[uuid.UUID] | None = None,
 ) -> dict:
     cleaned = title.strip()
     if not cleaned:
         raise ValidationFailedError("标题不能为空")
     _require_dept_in_scope(session, operator_id, dept_id)
+    audience = scope_service.resolve_audience_dept_ids(
+        session,
+        operator_id=operator_id,
+        owner_dept_id=dept_id,
+        audience_dept_ids=audience_dept_ids,
+    )
 
     course = Course(
         title=cleaned,
@@ -153,12 +192,14 @@ def create_course(
         is_deleted=False,
     )
     session.add(course)
+    session.flush()
+    _replace_audience(session, course.id, audience)
     session.commit()
     session.refresh(course)
     return _to_dict(session, course)
 
 
-# 实现：更新课程元数据（未传入的字段保持原值；description 可显式传 null 清空）
+# 实现：更新课程元数据与 audience
 def update_course(
     session: Session,
     *,
@@ -168,6 +209,8 @@ def update_course(
     description: str | None = None,
     dept_id: uuid.UUID | None = None,
     fields_set: set[str] | None = None,
+    audience_dept_ids: list[uuid.UUID] | None = None,
+    audience_provided: bool = False,
 ) -> dict:
     course = _require_course_in_scope(session, operator_id, course_id)
     touched = fields_set or set()
@@ -181,16 +224,30 @@ def update_course(
     if "description" in touched:
         course.description = description
 
+    owner_changed = False
     if "dept_id" in touched and dept_id is not None:
         _require_dept_in_scope(session, operator_id, dept_id)
+        if dept_id != course.dept_id:
+            owner_changed = True
         course.dept_id = dept_id
+
+    force_own_dept = not scope_service.can_customize_audience(session, operator_id)
+    if audience_provided or owner_changed or force_own_dept:
+        incoming = audience_dept_ids if audience_provided else None
+        audience = scope_service.resolve_audience_dept_ids(
+            session,
+            operator_id=operator_id,
+            owner_dept_id=course.dept_id,
+            audience_dept_ids=incoming,
+        )
+        _replace_audience(session, course.id, audience)
 
     session.commit()
     session.refresh(course)
     return _to_dict(session, course)
 
 
-# 实现：整体替换课程挂接文档
+# 实现：整体替换课程挂接文档（课程须在管理范围内）
 def replace_course_docs(
     session: Session,
     *,
