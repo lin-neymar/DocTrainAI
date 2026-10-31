@@ -28,3 +28,5 @@ class MeResponseData(BaseModel):
     dept: MeDept
     role_names: list[str]
     permission_codes: list[str]
+    # T1：个人主题主色；空则前端用默认 #1F4B7A
+    theme_primary: str | None = None

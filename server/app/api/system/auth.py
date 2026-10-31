@@ -66,5 +66,6 @@ def me(
         dept=MeDept(id=str(dept.id), name=dept.name),
         role_names=auth_service.list_role_names_for_user(db, current_user.id),
         permission_codes=auth_service.list_permission_codes_for_user(db, current_user.id),
+        theme_primary=current_user.theme_primary,
     )
     return success(data.model_dump())

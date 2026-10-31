@@ -1,7 +1,7 @@
 """FastAPI 应用入口。
 
 职责：创建 app 实例、挂载各 APIRouter、注册全局异常处理。
-启动：在 server/ 目录执行 1. source .venv/bin/activate 激活虚拟环境 2. uvicorn app.main:app --reload 启动服务器
+启动：在 server/ 下激活 .venv 后执行 uvicorn app.main:app --reload
 """
 
 from fastapi import FastAPI
@@ -13,6 +13,7 @@ from app.api.system.course import router as course_router
 from app.api.system.dept import router as dept_router
 from app.api.system.doc import router as doc_router
 from app.api.system.role import router as role_router
+from app.api.system.settings import brand_router, theme_router
 from app.api.system.user import router as user_router
 from app.config import settings
 from app.core.handlers import register_exception_handlers
@@ -34,6 +35,8 @@ app.add_middleware(
 
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(theme_router, prefix="/api/v1")
+app.include_router(brand_router, prefix="/api/v1")
 app.include_router(dept_router, prefix="/api/v1")
 app.include_router(user_router, prefix="/api/v1")
 app.include_router(role_router, prefix="/api/v1")
