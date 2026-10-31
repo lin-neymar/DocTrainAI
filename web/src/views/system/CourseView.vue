@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * 课程管理：路由 course:read；写拆 create/update/delete；挂接 course:attach_doc。
- * 挂接文档选项来自可见文档列表；不在前端计算数据范围。
+ * 可见组织勾选规则与文档一致；挂接文档选项来自可见文档列表。
  */
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
   ElButton,
@@ -19,6 +19,7 @@ import {
   ElTable,
   ElTableColumn,
   ElTag,
+  ElTree,
 } from 'element-plus'
 
 import {
@@ -31,7 +32,17 @@ import {
 } from '@/api/system/course'
 import { fetchDeptTreeApi, type DeptTreeNode } from '@/api/system/dept'
 import { fetchDocsApi, type DocItem } from '@/api/system/doc'
+import {
+  audienceTreeForOwner,
+  canCustomizeAudience,
+  collectSubtreeIds,
+} from '@/utils/audience'
 import { hasPermission } from '@/utils/permission'
+
+type TreeExpose = {
+  setCheckedKeys: (keys: string[]) => void
+  getCheckedKeys: (leafOnly?: boolean) => (string | number)[]
+}
 
 const loading = ref(false)
 const courses = ref<CourseItem[]>([])
@@ -39,6 +50,7 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 
+const deptTree = ref<DeptTreeNode[]>([])
 const deptOptions = ref<{ id: string; label: string }[]>([])
 const deptNameMap = ref<Record<string, string>>({})
 const visibleDocs = ref<DocItem[]>([])
@@ -56,12 +68,15 @@ const canReadDocs = computed(() => hasPermission('doc:read'))
 const canAnyWrite = computed(
   () => canCreate.value || canUpdate.value || canDelete.value || canAttach.value,
 )
+const showAudiencePicker = computed(() => canCustomizeAudience())
 
 const formVisible = ref(false)
 const formMode = ref<'create' | 'edit'>('create')
 const formLoading = ref(false)
 const editingId = ref<string | null>(null)
 const formRef = ref<FormInstance>()
+const audienceTreeRef = ref<TreeExpose>()
+const pendingAudience = ref<string[]>([])
 const form = reactive({
   title: '',
   description: '',
@@ -73,6 +88,11 @@ const docsLoading = ref(false)
 const docsCourseId = ref<string | null>(null)
 const docsCourseTitle = ref('')
 const selectedDocIds = ref<string[]>([])
+
+const audienceTreeData = computed(() =>
+  audienceTreeForOwner(deptTree.value, form.dept_id),
+)
+const treeProps = { label: 'name', children: 'children' }
 
 const formRules: FormRules<typeof form> = {
   title: [
@@ -104,6 +124,7 @@ function flattenDepts(nodes: DeptTreeNode[]) {
 
 async function loadDepts() {
   const tree = await fetchDeptTreeApi()
+  deptTree.value = tree
   const { opts, names } = flattenDepts(tree)
   deptOptions.value = opts
   deptNameMap.value = names
@@ -142,10 +163,26 @@ function deptLabel(row: unknown) {
   return deptNameMap.value[c.dept_id] || c.dept_id.slice(0, 8)
 }
 
+function audienceLabel(row: unknown) {
+  const ids = asCourse(row).audience_dept_ids ?? []
+  if (!ids.length) return '—'
+  return ids.map((id) => deptNameMap.value[id] || id.slice(0, 8)).join('、')
+}
+
 function docLabels(row: unknown) {
   const ids = asCourse(row).doc_ids
   if (!ids.length) return [] as string[]
   return ids.map((id) => docTitleMap.value[id] || id.slice(0, 8))
+}
+
+async function setAudienceKeys(keys: string[]) {
+  await nextTick()
+  audienceTreeRef.value?.setCheckedKeys(keys)
+}
+
+function readAudienceKeys(): string[] | undefined {
+  if (!showAudiencePicker.value) return undefined
+  return (audienceTreeRef.value?.getCheckedKeys(false) ?? []).map(String)
 }
 
 function openCreate() {
@@ -155,6 +192,7 @@ function openCreate() {
   form.title = ''
   form.description = ''
   form.dept_id = deptOptions.value[0]?.id ?? ''
+  pendingAudience.value = form.dept_id ? [form.dept_id] : []
   formVisible.value = true
 }
 
@@ -166,8 +204,29 @@ function openEdit(row: unknown) {
   form.title = c.title
   form.description = c.description ?? ''
   form.dept_id = c.dept_id
+  const ownerNode = audienceTreeForOwner(deptTree.value, form.dept_id)[0]
+  const allowed = new Set(ownerNode ? collectSubtreeIds(ownerNode) : [c.dept_id])
+  const fromServer = c.audience_dept_ids ?? [c.dept_id]
+  pendingAudience.value = fromServer.filter((id) => allowed.has(id))
+  if (!pendingAudience.value.length && form.dept_id) {
+    pendingAudience.value = [form.dept_id]
+  }
   formVisible.value = true
 }
+
+watch(formVisible, (open) => {
+  if (!open || !showAudiencePicker.value) return
+  void setAudienceKeys(pendingAudience.value)
+})
+
+watch(
+  () => form.dept_id,
+  (id) => {
+    if (!formVisible.value || !showAudiencePicker.value) return
+    pendingAudience.value = id ? [id] : []
+    void setAudienceKeys(pendingAudience.value)
+  },
+)
 
 async function openAttachDocs(row: unknown) {
   if (!canAttach.value) return
@@ -183,10 +242,16 @@ async function openAttachDocs(row: unknown) {
   docsVisible.value = true
 }
 
-// 实现：创建或更新课程元数据
+// 实现：创建或更新课程元数据与 audience
 async function onSubmitForm() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
+
+  const audience = readAudienceKeys()
+  if (showAudiencePicker.value && (!audience || audience.length === 0)) {
+    ElMessage.warning('请至少勾选一个可见组织')
+    return
+  }
 
   formLoading.value = true
   try {
@@ -197,6 +262,7 @@ async function onSubmitForm() {
         title,
         description,
         dept_id: form.dept_id,
+        ...(audience !== undefined ? { audience_dept_ids: audience } : {}),
       })
       ElMessage.success('创建成功')
     } else if (editingId.value) {
@@ -204,6 +270,7 @@ async function onSubmitForm() {
         title,
         description,
         dept_id: form.dept_id,
+        ...(audience !== undefined ? { audience_dept_ids: audience } : {}),
       })
       ElMessage.success('更新成功')
     }
@@ -284,7 +351,7 @@ onMounted(async () => {
 <template>
   <div class="course-page">
     <div class="toolbar">
-      <span class="hint">挂接文档不放大文档权限；删课程不删文档</span>
+      <span class="hint">挂接文档不放大文档权限；勾选组织节点表示该节点子树可读</span>
       <div class="toolbar-right">
         <ElButton :loading="loading" @click="loadCourses">刷新</ElButton>
         <ElButton v-if="canCreate" type="primary" @click="openCreate">新增课程</ElButton>
@@ -294,17 +361,22 @@ onMounted(async () => {
     <div class="table-panel">
       <ElTable v-loading="loading" :data="courses" stripe empty-text="暂无课程">
         <ElTableColumn prop="title" label="标题" min-width="160" />
-        <ElTableColumn label="部门" min-width="120">
+        <ElTableColumn label="归属" min-width="110">
           <template #default="{ row }">
             {{ deptLabel(row) }}
           </template>
         </ElTableColumn>
-        <ElTableColumn label="简介" min-width="160" show-overflow-tooltip>
+        <ElTableColumn label="可见组织" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ audienceLabel(row) }}
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="简介" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">
             {{ asCourse(row).description || '—' }}
           </template>
         </ElTableColumn>
-        <ElTableColumn label="挂接文档" min-width="220">
+        <ElTableColumn label="挂接文档" min-width="200">
           <template #default="{ row }">
             <template v-if="docLabels(row).length">
               <ElTag
@@ -353,7 +425,7 @@ onMounted(async () => {
     <ElDialog
       v-model="formVisible"
       :title="formTitle"
-      width="480px"
+      width="520px"
       destroy-on-close
       @closed="formRef?.resetFields()"
     >
@@ -381,6 +453,22 @@ onMounted(async () => {
             />
           </ElSelect>
         </ElFormItem>
+        <ElFormItem v-if="showAudiencePicker" label="可见组织">
+          <p class="field-tip">勾选节点后，该节点及下级部门人员可读；不级联勾选子节点。</p>
+          <div class="audience-tree">
+            <ElTree
+              v-if="audienceTreeData.length"
+              ref="audienceTreeRef"
+              :data="audienceTreeData"
+              :props="treeProps"
+              show-checkbox
+              check-strictly
+              node-key="id"
+              default-expand-all
+            />
+          </div>
+        </ElFormItem>
+        <p v-else class="field-tip">可见范围固定为您所在部门（由服务端写入）。</p>
       </ElForm>
       <template #footer>
         <ElButton @click="formVisible = false">取消</ElButton>
@@ -479,5 +567,14 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--dt-text-secondary);
   line-height: 1.5;
+}
+
+.audience-tree {
+  max-height: 220px;
+  overflow: auto;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--dt-border);
+  border-radius: 6px;
 }
 </style>

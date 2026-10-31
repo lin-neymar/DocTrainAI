@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * 文档管理：路由 doc:read；上传 doc:create；编辑 doc:update；删除 doc:delete。
- * 数据范围与可见性不在前端计算；不展示解析状态（阶段 2）。
+ * 可见组织：有 data:scope:all 或 dept:create 可勾选；部门官无勾选（后端固定本部门）。
  */
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules, UploadFile, UploadRawFile } from 'element-plus'
 import {
   ElButton,
@@ -18,6 +18,7 @@ import {
   ElSelect,
   ElTable,
   ElTableColumn,
+  ElTree,
   ElUpload,
 } from 'element-plus'
 
@@ -30,7 +31,17 @@ import {
   uploadDocApi,
   type DocItem,
 } from '@/api/system/doc'
+import {
+  audienceTreeForOwner,
+  canCustomizeAudience,
+  collectSubtreeIds,
+} from '@/utils/audience'
 import { hasPermission } from '@/utils/permission'
+
+type TreeExpose = {
+  setCheckedKeys: (keys: string[]) => void
+  getCheckedKeys: (leafOnly?: boolean) => (string | number)[]
+}
 
 const loading = ref(false)
 const docs = ref<DocItem[]>([])
@@ -38,16 +49,19 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 
+const deptTree = ref<DeptTreeNode[]>([])
 const deptOptions = ref<{ id: string; label: string }[]>([])
 const deptNameMap = ref<Record<string, string>>({})
 
 const canCreate = computed(() => hasPermission('doc:create'))
 const canUpdate = computed(() => hasPermission('doc:update'))
 const canDelete = computed(() => hasPermission('doc:delete'))
+const showAudiencePicker = computed(() => canCustomizeAudience())
 
 const uploadVisible = ref(false)
 const uploadLoading = ref(false)
 const uploadFormRef = ref<FormInstance>()
+const uploadAudienceTreeRef = ref<TreeExpose>()
 const uploadForm = reactive({
   title: '',
   dept_id: '',
@@ -59,10 +73,21 @@ const editVisible = ref(false)
 const editLoading = ref(false)
 const editingId = ref<string | null>(null)
 const editFormRef = ref<FormInstance>()
+const editAudienceTreeRef = ref<TreeExpose>()
 const editForm = reactive({
   title: '',
   dept_id: '',
 })
+const pendingEditAudience = ref<string[]>([])
+
+const uploadAudienceTree = computed(() =>
+  audienceTreeForOwner(deptTree.value, uploadForm.dept_id),
+)
+const editAudienceTree = computed(() =>
+  audienceTreeForOwner(deptTree.value, editForm.dept_id),
+)
+
+const treeProps = { label: 'name', children: 'children' }
 
 const uploadRules: FormRules<typeof uploadForm> = {
   title: [
@@ -107,6 +132,7 @@ function flattenDepts(nodes: DeptTreeNode[]) {
 
 async function loadDepts() {
   const tree = await fetchDeptTreeApi()
+  deptTree.value = tree
   const { opts, names } = flattenDepts(tree)
   deptOptions.value = opts
   deptNameMap.value = names
@@ -135,10 +161,27 @@ function deptLabel(row: unknown) {
   return deptNameMap.value[d.dept_id] || d.dept_id.slice(0, 8)
 }
 
+function audienceLabel(row: unknown) {
+  const ids = asDoc(row).audience_dept_ids ?? []
+  if (!ids.length) return '—'
+  return ids.map((id) => deptNameMap.value[id] || id.slice(0, 8)).join('、')
+}
+
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+// 实现：读取勾选的可见组织；无勾选能力时不传
+function readAudienceKeys(treeRef: TreeExpose | undefined): string[] | undefined {
+  if (!showAudiencePicker.value) return undefined
+  return (treeRef?.getCheckedKeys(false) ?? []).map(String)
+}
+
+async function setAudienceKeys(treeRef: TreeExpose | undefined, keys: string[]) {
+  await nextTick()
+  treeRef?.setCheckedKeys(keys)
 }
 
 function openUpload() {
@@ -156,8 +199,45 @@ function openEdit(row: unknown) {
   editingId.value = d.id
   editForm.title = d.title
   editForm.dept_id = d.dept_id
+  const ownerNode = audienceTreeForOwner(deptTree.value, editForm.dept_id)[0]
+  const allowed = new Set(ownerNode ? collectSubtreeIds(ownerNode) : [d.dept_id])
+  const fromServer = d.audience_dept_ids ?? [d.dept_id]
+  pendingEditAudience.value = fromServer.filter((id) => allowed.has(id))
+  if (!pendingEditAudience.value.length && editForm.dept_id) {
+    pendingEditAudience.value = [editForm.dept_id]
+  }
   editVisible.value = true
 }
+
+watch(uploadVisible, (open) => {
+  if (!open || !showAudiencePicker.value) return
+  void setAudienceKeys(
+    uploadAudienceTreeRef.value,
+    uploadForm.dept_id ? [uploadForm.dept_id] : [],
+  )
+})
+
+watch(editVisible, (open) => {
+  if (!open || !showAudiencePicker.value) return
+  void setAudienceKeys(editAudienceTreeRef.value, pendingEditAudience.value)
+})
+
+watch(
+  () => uploadForm.dept_id,
+  (id) => {
+    if (!uploadVisible.value || !showAudiencePicker.value) return
+    void setAudienceKeys(uploadAudienceTreeRef.value, id ? [id] : [])
+  },
+)
+
+watch(
+  () => editForm.dept_id,
+  (id) => {
+    if (!editVisible.value || !showAudiencePicker.value) return
+    pendingEditAudience.value = id ? [id] : []
+    void setAudienceKeys(editAudienceTreeRef.value, pendingEditAudience.value)
+  },
+)
 
 /** 仅本地选文件，不走 ElUpload 自动上传 */
 function onFileChange(uploadFile: UploadFile) {
@@ -182,14 +262,25 @@ function onFileRemove() {
   fileList.value = []
 }
 
-// 实现：multipart 上传
+// 实现：multipart 上传（可带 audience）
 async function onUploadSubmit() {
   const valid = await uploadFormRef.value?.validate().catch(() => false)
   if (!valid || !uploadForm.file) return
 
+  const audience = readAudienceKeys(uploadAudienceTreeRef.value)
+  if (showAudiencePicker.value && (!audience || audience.length === 0)) {
+    ElMessage.warning('请至少勾选一个可见组织')
+    return
+  }
+
   uploadLoading.value = true
   try {
-    await uploadDocApi(uploadForm.title.trim(), uploadForm.dept_id, uploadForm.file)
+    await uploadDocApi(
+      uploadForm.title.trim(),
+      uploadForm.dept_id,
+      uploadForm.file,
+      audience,
+    )
     ElMessage.success('上传成功')
     uploadVisible.value = false
     page.value = 1
@@ -201,17 +292,31 @@ async function onUploadSubmit() {
   }
 }
 
-// 实现：更新标题/部门（不换原文件）
+// 实现：更新标题/部门/audience
 async function onEditSubmit() {
   const valid = await editFormRef.value?.validate().catch(() => false)
   if (!valid || !editingId.value) return
 
+  const audience = readAudienceKeys(editAudienceTreeRef.value)
+  if (showAudiencePicker.value && (!audience || audience.length === 0)) {
+    ElMessage.warning('请至少勾选一个可见组织')
+    return
+  }
+
   editLoading.value = true
   try {
-    await updateDocApi(editingId.value, {
+    const body: {
+      title: string
+      dept_id: string
+      audience_dept_ids?: string[]
+    } = {
       title: editForm.title.trim(),
       dept_id: editForm.dept_id,
-    })
+    }
+    if (audience !== undefined) {
+      body.audience_dept_ids = audience
+    }
+    await updateDocApi(editingId.value, body)
     ElMessage.success('已更新')
     editVisible.value = false
     await loadDocs()
@@ -292,7 +397,9 @@ onMounted(async () => {
 <template>
   <div class="doc-page">
     <div class="toolbar">
-      <span class="hint">仅展示当前可见文档；阶段 1 不解析正文、不显示解析状态</span>
+      <span class="hint">
+        仅展示当前可见文档；勾选组织节点表示该节点子树可读（含日后新建下级）
+      </span>
       <div class="toolbar-right">
         <ElButton :loading="loading" @click="loadDocs">刷新</ElButton>
         <ElButton v-if="canCreate" type="primary" @click="openUpload">上传文档</ElButton>
@@ -302,9 +409,14 @@ onMounted(async () => {
     <div class="table-panel">
       <ElTable v-loading="loading" :data="docs" stripe empty-text="暂无文档">
         <ElTableColumn prop="title" label="标题" min-width="160" />
-        <ElTableColumn label="部门" min-width="120">
+        <ElTableColumn label="归属" min-width="110">
           <template #default="{ row }">
             {{ deptLabel(row) }}
+          </template>
+        </ElTableColumn>
+        <ElTableColumn label="可见组织" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ audienceLabel(row) }}
           </template>
         </ElTableColumn>
         <ElTableColumn prop="original_filename" label="原文件名" min-width="140" />
@@ -341,7 +453,7 @@ onMounted(async () => {
     <ElDialog
       v-model="uploadVisible"
       title="上传文档"
-      width="480px"
+      width="520px"
       destroy-on-close
       @closed="uploadFormRef?.resetFields()"
     >
@@ -364,6 +476,23 @@ onMounted(async () => {
             />
           </ElSelect>
         </ElFormItem>
+        <ElFormItem v-if="showAudiencePicker" label="可见组织">
+          <p class="field-tip">勾选节点后，该节点及下级部门人员可读；不级联勾选子节点。</p>
+          <div class="audience-tree">
+            <ElTree
+              v-if="uploadAudienceTree.length"
+              ref="uploadAudienceTreeRef"
+              :data="uploadAudienceTree"
+              :props="treeProps"
+              show-checkbox
+              check-strictly
+              node-key="id"
+              default-expand-all
+            />
+            <p v-else class="field-tip">请先选择归属部门</p>
+          </div>
+        </ElFormItem>
+        <p v-else class="field-tip">可见范围固定为您所在部门（由服务端写入）。</p>
         <ElFormItem label="文件（pdf / md）" prop="file">
           <ElUpload
             :auto-upload="false"
@@ -388,7 +517,7 @@ onMounted(async () => {
     <ElDialog
       v-model="editVisible"
       title="编辑文档"
-      width="440px"
+      width="520px"
       destroy-on-close
       @closed="editFormRef?.resetFields()"
     >
@@ -406,7 +535,22 @@ onMounted(async () => {
             />
           </ElSelect>
         </ElFormItem>
-        <p class="field-tip">阶段 1 不支持覆盖原文件，仅改标题与部门。</p>
+        <ElFormItem v-if="showAudiencePicker" label="可见组织">
+          <div class="audience-tree">
+            <ElTree
+              v-if="editAudienceTree.length"
+              ref="editAudienceTreeRef"
+              :data="editAudienceTree"
+              :props="treeProps"
+              show-checkbox
+              check-strictly
+              node-key="id"
+              default-expand-all
+            />
+          </div>
+        </ElFormItem>
+        <p v-else class="field-tip">可见范围固定为您所在部门（由服务端写入）。</p>
+        <p class="field-tip">阶段 1 不支持覆盖原文件，仅改标题、部门与可见组织。</p>
       </ElForm>
       <template #footer>
         <ElButton @click="editVisible = false">取消</ElButton>
@@ -460,8 +604,18 @@ onMounted(async () => {
 }
 
 .field-tip {
-  margin: 0;
+  margin: 0 0 8px;
   font-size: 12px;
   color: var(--dt-text-secondary);
+  line-height: 1.5;
+}
+
+.audience-tree {
+  max-height: 220px;
+  overflow: auto;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--dt-border);
+  border-radius: 6px;
 }
 </style>

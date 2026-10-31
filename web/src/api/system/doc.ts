@@ -1,5 +1,5 @@
 /**
- * 文档接口：列表/下载 doc:read；上传 doc:create；改元数据 doc:update；软删 doc:delete。
+ * 文档接口：列表/下载 doc:read；上传 doc:create；改元数据与 audience doc:update；软删 doc:delete。
  * 可见性由后端 get_visible_doc_ids 裁剪；阶段 1 不展示解析状态。
  */
 import { request, type BlobDownload } from '@/utils/request'
@@ -10,6 +10,8 @@ export interface DocItem {
   id: string
   title: string
   dept_id: string
+  /** 可见组织节点；选中节点子树内人员可读 */
+  audience_dept_ids?: string[]
   original_filename: string
   extension: string
   size_bytes: number
@@ -22,6 +24,7 @@ export interface DocItem {
 export interface DocUpdateBody {
   title?: string
   dept_id?: string
+  audience_dept_ids?: string[]
 }
 
 // 实现：GET /api/v1/docs 分页列表
@@ -31,18 +34,26 @@ export function fetchDocsApi(page: number, pageSize: number) {
   })
 }
 
-// 实现：POST /api/v1/docs multipart 上传
-export function uploadDocApi(title: string, deptId: string, file: File) {
+// 实现：POST /api/v1/docs multipart 上传（可选 audience JSON）
+export function uploadDocApi(
+  title: string,
+  deptId: string,
+  file: File,
+  audienceDeptIds?: string[],
+) {
   const form = new FormData()
   form.append('title', title)
   form.append('dept_id', deptId)
   form.append('file', file)
+  if (audienceDeptIds !== undefined) {
+    form.append('audience_dept_ids', JSON.stringify(audienceDeptIds))
+  }
   return request.post<unknown, DocItem>('/api/v1/docs', form, {
     timeout: 120000,
   })
 }
 
-// 实现：PUT /api/v1/docs/{id} 仅改元数据
+// 实现：PUT /api/v1/docs/{id} 改元数据与 audience
 export function updateDocApi(docId: string, body: DocUpdateBody) {
   return request.put<unknown, DocItem>(`/api/v1/docs/${docId}`, body)
 }

@@ -11,6 +11,7 @@ export interface CourseItem {
   title: string
   description: string | null
   dept_id: string
+  audience_dept_ids?: string[]
   doc_ids: string[]
   created_at?: string
   updated_at?: string
@@ -20,12 +21,14 @@ export interface CourseCreateBody {
   title: string
   description?: string | null
   dept_id: string
+  audience_dept_ids?: string[]
 }
 
 export interface CourseUpdateBody {
   title?: string
   description?: string | null
   dept_id?: string
+  audience_dept_ids?: string[]
 }
 
 // 实现：GET /api/v1/courses 分页列表
