@@ -54,6 +54,12 @@ export const systemRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/system/CourseView.vue'),
         meta: { title: '课程管理', permission: 'course:read' },
       },
+      {
+        path: 'settings',
+        name: 'settings',
+        component: () => import('@/views/system/SettingsView.vue'),
+        meta: { title: '系统设置', permission: 'system:read' },
+      },
     ],
   },
 ]

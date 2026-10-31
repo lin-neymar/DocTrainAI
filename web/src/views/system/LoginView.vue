@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElButton, ElCard, ElForm, ElFormItem, ElInput, ElMessage } from 'element-plus'
 
+import {
+  brandLogoUrl,
+  fetchPublicBrandApi,
+} from '@/api/system/settings'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
@@ -17,9 +21,30 @@ const form = reactive({
   password: '',
 })
 
+const siteName = ref('DocTrainAI')
+const subtitle = ref('企业内部规章培训与知识助手')
+const hasLogo = ref(false)
+const logoBust = ref(0)
+
+const logoSrc = () =>
+  hasLogo.value ? `${brandLogoUrl()}?t=${logoBust.value}` : ''
+
 const rules: FormRules<typeof form> = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+}
+
+// 实现：拉取公开品牌（T2/T3/T4）
+async function loadBrand() {
+  try {
+    const data = await fetchPublicBrandApi()
+    siteName.value = data.site_name || siteName.value
+    subtitle.value = data.login_subtitle || subtitle.value
+    hasLogo.value = data.has_logo
+    logoBust.value = Date.now()
+  } catch {
+    // 公开接口失败时保留默认文案
+  }
 }
 
 // 实现：校验表单后登录，成功跳转 redirect 或首页
@@ -39,15 +64,20 @@ async function onSubmit() {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  void loadBrand()
+})
 </script>
 
 <template>
   <div class="login-page">
     <ElCard class="login-card" shadow="hover">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true" />
-        <h1>DocTrainAI</h1>
-        <p>文档培训智能平台</p>
+        <img v-if="logoSrc()" class="brand-logo" :src="logoSrc()" alt="" />
+        <div v-else class="brand-mark" aria-hidden="true" />
+        <h1>{{ siteName }}</h1>
+        <p>{{ subtitle }}</p>
       </div>
 
       <ElForm
@@ -82,45 +112,53 @@ async function onSubmit() {
 <style scoped>
 .login-page {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 24px;
+  box-sizing: border-box;
   background:
     radial-gradient(circle at top left, var(--dt-color-primary-soft), transparent 42%),
     var(--dt-bg-page);
 }
 
 .login-card {
-  width: min(400px, 100%);
-  border: 1px solid var(--dt-border);
+  width: 100%;
+  max-width: 400px;
   border-radius: 12px;
 }
 
 .brand {
   text-align: center;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .brand-mark {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   margin: 0 auto 12px;
-  border-radius: 10px;
+  border-radius: 12px;
   background: linear-gradient(145deg, var(--dt-color-primary), var(--dt-color-primary-hover));
 }
 
+.brand-logo {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  object-fit: contain;
+  display: block;
+}
+
 .brand h1 {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  margin: 0 0 8px;
+  font-size: 24px;
   color: var(--dt-color-primary);
 }
 
 .brand p {
-  margin: 8px 0 0;
+  margin: 0;
+  font-size: 13px;
   color: var(--dt-text-secondary);
-  font-size: 14px;
 }
 
 .submit {

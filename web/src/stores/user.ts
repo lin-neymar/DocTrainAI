@@ -1,11 +1,21 @@
 /**
  * 当前用户与权限码的唯一存放处（WEB_SPEC）。
- * localStorage 只存 token；刷新后用 /auth/me 恢复本 store。
+ * localStorage 只存 token + 可选个人主题色；刷新后用 /auth/me 恢复。
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { fetchMeApi, loginApi, logoutApi } from '@/api/system/auth'
+import {
+  fetchMeApi,
+  loginApi,
+  logoutApi,
+  updateMyThemeApi,
+} from '@/api/system/auth'
+import {
+  applyThemePrimary,
+  DEFAULT_THEME_PRIMARY,
+  writeStoredThemePrimary,
+} from '@/utils/theme'
 import { clearToken, getToken, setToken } from '@/utils/token'
 
 export const useUserStore = defineStore('user', () => {
@@ -15,6 +25,7 @@ export const useUserStore = defineStore('user', () => {
   const deptName = ref<string | null>(null)
   const roleNames = ref<string[]>([])
   const permissionCodes = ref<string[]>([])
+  const themePrimary = ref<string | null>(null)
   /** 是否已用 /me 或登录结果填充过会话（有 token 但未 restore 时为 false） */
   const ready = ref(false)
 
@@ -28,10 +39,13 @@ export const useUserStore = defineStore('user', () => {
     deptName.value = null
     roleNames.value = []
     permissionCodes.value = []
+    themePrimary.value = null
     ready.value = false
+    applyThemePrimary(DEFAULT_THEME_PRIMARY)
+    writeStoredThemePrimary(null)
   }
 
-  // 实现：用 /me 结果写入 store
+  // 实现：用 /me 结果写入 store 并应用主题
   function applyMe(data: Awaited<ReturnType<typeof fetchMeApi>>) {
     userId.value = data.user.id
     username.value = data.user.username
@@ -39,6 +53,9 @@ export const useUserStore = defineStore('user', () => {
     deptName.value = data.dept.name
     roleNames.value = data.role_names
     permissionCodes.value = data.permission_codes
+    themePrimary.value = data.theme_primary ?? null
+    applyThemePrimary(themePrimary.value)
+    writeStoredThemePrimary(themePrimary.value)
     ready.value = true
   }
 
@@ -82,6 +99,14 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  // 实现：更新个人主题色并立刻生效
+  async function setThemePrimary(color: string | null) {
+    const data = await updateMyThemeApi(color)
+    themePrimary.value = data.theme_primary
+    applyThemePrimary(themePrimary.value)
+    writeStoredThemePrimary(themePrimary.value)
+  }
+
   // 实现：是否持有某权限码（只认 code）
   function hasPermission(permCode: string) {
     return permissionCodes.value.includes(permCode)
@@ -94,12 +119,14 @@ export const useUserStore = defineStore('user', () => {
     deptName,
     roleNames,
     permissionCodes,
+    themePrimary,
     ready,
     isLoggedIn,
     resetSession,
     login,
     restoreSession,
     logout,
+    setThemePrimary,
     hasPermission,
   }
 })
