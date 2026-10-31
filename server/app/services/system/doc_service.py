@@ -21,12 +21,23 @@ from app.utils import files as file_utils
 from app.utils.pagination import page_offset
 
 
-# 实现：文档元数据转响应 dict（不含磁盘绝对路径）
-def _to_dict(doc: Doc) -> dict:
+# 实现：读取文档 audience 部门 id 列表
+def _audience_dept_ids(session: Session, doc_id: uuid.UUID) -> list[str]:
+    rows = session.scalars(
+        select(DocAudienceDept.dept_id)
+        .where(DocAudienceDept.doc_id == doc_id)
+        .order_by(DocAudienceDept.dept_id)
+    ).all()
+    return [str(d) for d in rows]
+
+
+# 实现：文档元数据转响应 dict（含 audience；不含磁盘绝对路径）
+def _to_dict(session: Session, doc: Doc) -> dict:
     return {
         "id": str(doc.id),
         "title": doc.title,
         "dept_id": str(doc.dept_id),
+        "audience_dept_ids": _audience_dept_ids(session, doc.id),
         "original_filename": doc.original_filename,
         "extension": doc.extension,
         "size_bytes": doc.size_bytes,
@@ -115,14 +126,14 @@ def list_docs(
         .offset(page_offset(page, page_size))
         .limit(page_size)
     ).all()
-    return [_to_dict(d) for d in rows], int(total)
+    return [_to_dict(session, d) for d in rows], int(total)
 
 
 # 实现：文档详情（不可见 → 404）
 def get_doc(
     session: Session, *, operator_id: uuid.UUID, doc_id: uuid.UUID
 ) -> dict:
-    return _to_dict(_require_visible_doc(session, operator_id, doc_id))
+    return _to_dict(session, _require_visible_doc(session, operator_id, doc_id))
 
 
 # 实现：multipart 上传：校验文件 → 落盘 → 写元数据 + audience
@@ -175,7 +186,7 @@ def create_doc(
         path.unlink(missing_ok=True)
         raise
     session.refresh(doc)
-    return _to_dict(doc)
+    return _to_dict(session, doc)
 
 
 # 实现：更新标题/归属/audience；目标与新部门均须在可访问部门内
@@ -218,7 +229,7 @@ def update_doc(
 
     session.commit()
     session.refresh(doc)
-    return _to_dict(doc)
+    return _to_dict(session, doc)
 
 
 # 实现：软删除文档（不删磁盘文件）；按部门范围，不依赖 doc:read

@@ -31,13 +31,24 @@ def _doc_ids_of(session: Session, course_id: uuid.UUID) -> list[uuid.UUID]:
     )
 
 
-# 实现：课程转响应 dict（含 doc_ids）
+# 实现：读取课程 audience 部门 id 列表
+def _audience_dept_ids(session: Session, course_id: uuid.UUID) -> list[str]:
+    rows = session.scalars(
+        select(CourseAudienceDept.dept_id)
+        .where(CourseAudienceDept.course_id == course_id)
+        .order_by(CourseAudienceDept.dept_id)
+    ).all()
+    return [str(d) for d in rows]
+
+
+# 实现：课程转响应 dict（含 doc_ids、audience_dept_ids）
 def _to_dict(session: Session, course: Course) -> dict:
     return {
         "id": str(course.id),
         "title": course.title,
         "description": course.description,
         "dept_id": str(course.dept_id),
+        "audience_dept_ids": _audience_dept_ids(session, course.id),
         "doc_ids": [str(did) for did in _doc_ids_of(session, course.id)],
         "created_at": course.created_at.isoformat() if course.created_at else None,
         "updated_at": course.updated_at.isoformat() if course.updated_at else None,

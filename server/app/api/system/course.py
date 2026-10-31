@@ -24,7 +24,7 @@ router = APIRouter(prefix="/courses", tags=["courses"])
 @router.get(
     "",
     summary="课程列表",
-    description="分页列出当前用户阅读可见的课程。需要 course:read。",
+    description="分页列出当前用户阅读可见的课程（含 audience_dept_ids）。需要 course:read。",
 )
 # 实现：分页列出可见范围内课程
 def list_courses(
@@ -60,7 +60,10 @@ def get_course(
 @router.post(
     "",
     summary="创建课程",
-    description="需要 course:create；dept_id 须在数据范围内。",
+    description=(
+        "需要 course:create；可传 audience_dept_ids。"
+        "部门官 audience 由服务端固定为本部门。"
+    ),
 )
 # 实现：创建课程
 def create_course(
@@ -75,6 +78,7 @@ def create_course(
             title=body.title,
             description=body.description,
             dept_id=body.dept_id,
+            audience_dept_ids=body.audience_dept_ids,
         )
     )
 
@@ -82,9 +86,9 @@ def create_course(
 @router.put(
     "/{course_id}",
     summary="更新课程",
-    description="可改 title、description、dept_id。需要 course:update。",
+    description="可改 title、description、dept_id、audience_dept_ids。需要 course:update。",
 )
-# 实现：更新课程元数据
+# 实现：更新课程元数据与 audience
 def update_course(
     course_id: UUID,
     body: CourseUpdate,
@@ -100,6 +104,8 @@ def update_course(
             description=body.description,
             dept_id=body.dept_id,
             fields_set=body.model_fields_set,
+            audience_dept_ids=body.audience_dept_ids,
+            audience_provided="audience_dept_ids" in body.model_fields_set,
         )
     )
 

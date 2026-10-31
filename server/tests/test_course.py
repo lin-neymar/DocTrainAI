@@ -88,6 +88,7 @@ def test_create_list_attach_docs_update_delete(admin_headers: dict[str, str]) ->
     body = created.json()["data"]
     assert body["title"] == title
     assert body["doc_ids"] == []
+    assert body["audience_dept_ids"] == [root_id]
     course_id = body["id"]
 
     listed = client.get("/api/v1/courses?page=1&page_size=100", headers=admin_headers)

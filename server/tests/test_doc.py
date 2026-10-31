@@ -78,6 +78,7 @@ def test_upload_list_download_update_delete(admin_headers: dict[str, str]) -> No
     assert body["extension"] == "md"
     assert body["sha256"]
     assert "storage_key" not in body
+    assert body["audience_dept_ids"] == [root_id]
     doc_id = body["id"]
 
     listed = client.get("/api/v1/docs?page=1&page_size=100", headers=admin_headers)
@@ -189,3 +190,96 @@ def test_staff_cannot_see_other_branch_doc(admin_headers: dict[str, str]) -> Non
     admin_outside = client.get(f"/api/v1/docs/{doc_id}", headers=admin_headers)
     assert admin_outside.status_code == 404
     assert admin_outside.json()["code"] == 40400
+
+
+def test_upload_and_update_audience_within_owner_subtree(
+    admin_headers: dict[str, str],
+) -> None:
+    """S6：归属=根时可勾选分公司；audience 落在归属子树；改 audience 后可读性变化。"""
+    import json
+
+    password = "staffpass2"
+    with SessionLocal() as session:
+        root = session.scalar(
+            select(Dept).where(Dept.parent_id.is_(None), Dept.is_deleted.is_(False))
+        )
+        assert root is not None
+        branch = Dept(name=f"AudB-{uuid.uuid4().hex[:6]}", parent_id=root.id)
+        session.add(branch)
+        session.flush()
+        staff_role = session.scalar(
+            select(Role).where(Role.code == "staff", Role.is_deleted.is_(False))
+        )
+        assert staff_role is not None
+        username = f"staff_aud_{uuid.uuid4().hex[:8]}"
+        user = User(
+            username=username,
+            password_hash=bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
+            dept_id=branch.id,
+            is_deleted=False,
+        )
+        session.add(user)
+        session.flush()
+        session.add(UserRole(user_id=user.id, role_id=staff_role.id))
+        session.commit()
+        root_id = str(root.id)
+        branch_id = str(branch.id)
+
+    # 归属根 + audience=分公司 → 分公司员工可读；根上超管不可读（不在该节点子树）
+    created = client.post(
+        "/api/v1/docs",
+        headers=admin_headers,
+        data={
+            "title": f"audience-branch-{uuid.uuid4().hex[:6]}",
+            "dept_id": root_id,
+            "audience_dept_ids": json.dumps([branch_id]),
+        },
+        files={"file": ("a.md", _MD_BYTES, "text/markdown")},
+    )
+    assert created.status_code == 200
+    body = created.json()["data"]
+    assert body["audience_dept_ids"] == [branch_id]
+    doc_id = body["id"]
+
+    assert client.get(f"/api/v1/docs/{doc_id}", headers=admin_headers).status_code == 404
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": password},
+    )
+    assert login.status_code == 200
+    staff_headers = {
+        "Authorization": f"Bearer {login.json()['data']['access_token']}"
+    }
+    assert client.get(f"/api/v1/docs/{doc_id}", headers=staff_headers).status_code == 200
+
+    # 把 audience 改回根 → 超管可读，员工仍可读（员工部门在根子树内）
+    updated = client.put(
+        f"/api/v1/docs/{doc_id}",
+        headers=admin_headers,
+        json={"audience_dept_ids": [root_id]},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["data"]["audience_dept_ids"] == [root_id]
+    assert client.get(f"/api/v1/docs/{doc_id}", headers=admin_headers).status_code == 200
+    assert client.get(f"/api/v1/docs/{doc_id}", headers=staff_headers).status_code == 200
+
+    # B1：audience 指向兄弟外节点应失败——先建另一分支再尝试
+    with SessionLocal() as session:
+        root = session.scalar(
+            select(Dept).where(Dept.parent_id.is_(None), Dept.is_deleted.is_(False))
+        )
+        assert root is not None
+        other = Dept(name=f"AudO-{uuid.uuid4().hex[:6]}", parent_id=root.id)
+        session.add(other)
+        session.commit()
+        # 文档归属改为 branch 后，audience=other 不在归属子树
+        other_id = str(other.id)
+
+    moved = client.put(
+        f"/api/v1/docs/{doc_id}",
+        headers=admin_headers,
+        json={"dept_id": branch_id, "audience_dept_ids": [other_id]},
+    )
+    assert moved.status_code == 404
+    assert moved.json()["code"] == 40400
