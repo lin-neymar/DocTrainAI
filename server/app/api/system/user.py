@@ -1,4 +1,4 @@
-"""F2：用户 HTTP 接口（均需 user:manage，并受数据范围约束）。"""
+"""用户 HTTP 接口（细粒度权限码，并受数据范围约束）。"""
 
 from typing import Annotated
 from uuid import UUID
@@ -20,11 +20,11 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get(
     "",
     summary="用户列表",
-    description="分页列出数据范围内的用户。需要 user:manage。",
+    description="分页列出数据范围内的用户。需要 user:read。",
 )
 # 实现：分页列出可见范围内用户
 def list_users(
-    current_user: Annotated[User, Depends(require_permission("user:manage"))],
+    current_user: Annotated[User, Depends(require_permission("user:read"))],
     db: Annotated[Session, Depends(get_db)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -38,12 +38,12 @@ def list_users(
 @router.get(
     "/{user_id}",
     summary="用户详情",
-    description="目标用户部门不在范围内时返回 404。需要 user:manage。",
+    description="目标用户部门不在范围内时返回 404。需要 user:read。",
 )
 # 实现：用户详情
 def get_user(
     user_id: UUID,
-    current_user: Annotated[User, Depends(require_permission("user:manage"))],
+    current_user: Annotated[User, Depends(require_permission("user:read"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     return success(
@@ -54,12 +54,12 @@ def get_user(
 @router.post(
     "",
     summary="创建用户",
-    description="需要 user:manage；dept_id 须在操作者数据范围内。",
+    description="需要 user:create；dept_id 须在操作者数据范围内。",
 )
 # 实现：创建用户
 def create_user(
     body: UserCreate,
-    current_user: Annotated[User, Depends(require_permission("user:manage"))],
+    current_user: Annotated[User, Depends(require_permission("user:create"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     data = user_service.create_user(
@@ -76,13 +76,13 @@ def create_user(
 @router.put(
     "/{user_id}",
     summary="更新用户",
-    description="可改用户名、部门、角色列表。需要 user:manage。",
+    description="可改用户名、部门、角色列表。需要 user:update。",
 )
 # 实现：更新用户
 def update_user(
     user_id: UUID,
     body: UserUpdate,
-    current_user: Annotated[User, Depends(require_permission("user:manage"))],
+    current_user: Annotated[User, Depends(require_permission("user:update"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     data = user_service.update_user(
@@ -99,13 +99,13 @@ def update_user(
 @router.put(
     "/{user_id}/password",
     summary="重置密码",
-    description="管理员重置他人密码。需要 user:manage，并受数据范围约束。",
+    description="管理员重置他人密码。需要 user:reset_password，并受数据范围约束。",
 )
 # 实现：管理员重置密码
 def reset_password(
     user_id: UUID,
     body: UserPasswordReset,
-    current_user: Annotated[User, Depends(require_permission("user:manage"))],
+    current_user: Annotated[User, Depends(require_permission("user:reset_password"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     user_service.reset_password(
@@ -120,12 +120,12 @@ def reset_password(
 @router.delete(
     "/{user_id}",
     summary="软删除用户",
-    description="需要 user:manage；不能删除自己。",
+    description="需要 user:delete；不能删除自己。",
 )
 # 实现：软删除用户
 def delete_user(
     user_id: UUID,
-    current_user: Annotated[User, Depends(require_permission("user:manage"))],
+    current_user: Annotated[User, Depends(require_permission("user:delete"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     user_service.soft_delete_user(

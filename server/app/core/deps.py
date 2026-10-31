@@ -3,8 +3,8 @@
 get_current_user：证明「已登录是谁」→ 401
 require_permission：在已登录前提下证明「有没有某个权限码」→ 403
 
-业务路由典型写法（F 阶段）：
-    user: Annotated[User, Depends(require_permission("dept:manage"))]
+业务路由典型写法：
+    user: Annotated[User, Depends(require_permission("dept:create"))]
 
 注意：require_permission 只管功能权限，不代替数据范围（E-B/E-C 的 dept/doc 范围函数）。
 """
@@ -52,8 +52,8 @@ def require_permission(perm_code: str):
       2. 再从 DB 聚合该用户全部 permission_codes（多角色取并集）
       3. perm_code 不在集合中 → ForbiddenError（40300）
 
-    perm_code 必须与 seed/permission 表里的 code 完全一致，例如 "dept:manage"。
-    禁止在这里判断角色名或 role.code（规约：全量范围只看 data:scope:all 码，不看 super_admin）。
+    perm_code 必须与 seed/permission 表里的 code 完全一致，例如 "dept:create"。
+    禁止在这里判断角色名或 role.code（规约：全量管理范围只看 data:scope:all 码，不看 super_admin）。
     """
 
     # 实现：校验当前用户是否持有外层指定的权限码

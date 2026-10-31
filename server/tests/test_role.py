@@ -54,8 +54,11 @@ def test_list_permissions_from_db(admin_headers: dict[str, str]) -> None:
     items = resp.json()["data"]
     assert isinstance(items, list)
     codes = {p["code"] for p in items}
-    assert "role:manage" in codes
+    assert "role:assign_perm" in codes
+    assert "role:read" in codes
     assert "data:scope:all" in codes
+    assert "user:manage" not in codes
+
     assert len(codes) >= 9
 
 

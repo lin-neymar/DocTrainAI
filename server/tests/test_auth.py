@@ -41,7 +41,12 @@ def test_login_success_and_me() -> None:
     assert me_data["user"]["username"] == settings.init_admin_username
     assert me_data["dept"]["name"]
     assert "超级管理员" in me_data["role_names"]
-    assert "data:scope:all" in me_data["permission_codes"]
+    codes = me_data["permission_codes"]
+    assert "data:scope:all" in codes
+    assert "system:update" in codes
+    assert "dept:create" in codes
+    assert "user:manage" not in codes
+
 
 
 def test_login_failure() -> None:

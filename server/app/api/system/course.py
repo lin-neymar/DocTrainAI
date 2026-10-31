@@ -1,7 +1,7 @@
-"""F5：课程 HTTP 接口。
+"""课程 HTTP 接口。
 
 读：course:read，结果限制在可访问部门。
-写与挂文档：course:manage；挂接文档须落在 get_visible_doc_ids。
+写：course:create/update/delete；挂文档：course:attach_doc（文档须可见）。
 """
 
 from typing import Annotated
@@ -60,12 +60,12 @@ def get_course(
 @router.post(
     "",
     summary="创建课程",
-    description="需要 course:manage；dept_id 须在数据范围内。",
+    description="需要 course:create；dept_id 须在数据范围内。",
 )
 # 实现：创建课程
 def create_course(
     body: CourseCreate,
-    current_user: Annotated[User, Depends(require_permission("course:manage"))],
+    current_user: Annotated[User, Depends(require_permission("course:create"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     return success(
@@ -82,13 +82,13 @@ def create_course(
 @router.put(
     "/{course_id}",
     summary="更新课程",
-    description="可改 title、description、dept_id。需要 course:manage。",
+    description="可改 title、description、dept_id。需要 course:update。",
 )
 # 实现：更新课程元数据
 def update_course(
     course_id: UUID,
     body: CourseUpdate,
-    current_user: Annotated[User, Depends(require_permission("course:manage"))],
+    current_user: Annotated[User, Depends(require_permission("course:update"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     return success(
@@ -107,13 +107,13 @@ def update_course(
 @router.put(
     "/{course_id}/docs",
     summary="替换课程文档",
-    description="用 doc_ids 整体替换；文档须对操作者可见。需要 course:manage。",
+    description="用 doc_ids 整体替换；文档须对操作者可见。需要 course:attach_doc。",
 )
 # 实现：整体替换课程挂接文档
 def replace_course_docs(
     course_id: UUID,
     body: CourseDocsUpdate,
-    current_user: Annotated[User, Depends(require_permission("course:manage"))],
+    current_user: Annotated[User, Depends(require_permission("course:attach_doc"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     return success(
@@ -129,12 +129,12 @@ def replace_course_docs(
 @router.delete(
     "/{course_id}",
     summary="软删除课程",
-    description="不删除已挂接文档。需要 course:manage。",
+    description="不删除已挂接文档。需要 course:delete。",
 )
 # 实现：软删除课程
 def delete_course(
     course_id: UUID,
-    current_user: Annotated[User, Depends(require_permission("course:manage"))],
+    current_user: Annotated[User, Depends(require_permission("course:delete"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     course_service.soft_delete_course(

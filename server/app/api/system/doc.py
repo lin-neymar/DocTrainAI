@@ -1,7 +1,7 @@
-"""F4：文档 HTTP 接口。
+"""文档 HTTP 接口。
 
 读（列表/详情/下载）：doc:read + get_visible_doc_ids。
-上传/改元数据：doc:upload；软删除：doc:delete。
+上传：doc:create；改元数据：doc:update；软删除：doc:delete。
 """
 
 from typing import Annotated
@@ -76,11 +76,11 @@ def download_doc_file(
 @router.post(
     "",
     summary="上传文档",
-    description="multipart：title、dept_id、file。需要 doc:upload；部门须在数据范围内。",
+    description="multipart：title、dept_id、file。需要 doc:create；部门须在数据范围内。",
 )
 # 实现：上传并创建文档元数据
 async def create_doc(
-    current_user: Annotated[User, Depends(require_permission("doc:upload"))],
+    current_user: Annotated[User, Depends(require_permission("doc:create"))],
     db: Annotated[Session, Depends(get_db)],
     title: Annotated[str, Form(min_length=1, max_length=256)],
     dept_id: Annotated[UUID, Form()],
@@ -101,13 +101,13 @@ async def create_doc(
 @router.put(
     "/{doc_id}",
     summary="更新文档元数据",
-    description="可改 title、dept_id；不换原文件。需要 doc:upload。",
+    description="可改 title、dept_id；不换原文件。需要 doc:update。",
 )
 # 实现：更新文档标题/部门
 def update_doc(
     doc_id: UUID,
     body: DocUpdate,
-    current_user: Annotated[User, Depends(require_permission("doc:upload"))],
+    current_user: Annotated[User, Depends(require_permission("doc:update"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     return success(

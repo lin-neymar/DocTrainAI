@@ -133,7 +133,7 @@ def get_dept(session: Session, user_id: uuid.UUID, dept_id: uuid.UUID) -> dict:
     return _to_dict(dept)
 
 
-# 实现：创建部门（需调用方已校验 dept:manage）
+# 实现：创建部门（需调用方已校验 dept:create）
 def create_dept(
     session: Session,
     *,

@@ -1,6 +1,6 @@
-"""F3：角色 / 权限 HTTP 接口（均需 role:manage）。
+"""角色 / 权限 HTTP 接口（细粒度权限码）。
 
-GET /permissions 从 DB 读未删权限码；角色 CRUD + PUT 整体替换权限。
+读：role:read；写：role:create/update/delete；配权与权限清单：role:assign_perm。
 """
 
 from typing import Annotated
@@ -23,11 +23,11 @@ router = APIRouter(tags=["roles"])
 @router.get(
     "/permissions",
     summary="权限码列表",
-    description="从数据库返回未删除的权限码。需要 role:manage。",
+    description="从数据库返回未删除的权限码。需要 role:assign_perm。",
 )
 # 实现：列出 DB 中未删权限码
 def list_permissions(
-    current_user: Annotated[User, Depends(require_permission("role:manage"))],
+    current_user: Annotated[User, Depends(require_permission("role:assign_perm"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     return success(role_service.list_permissions(db))
@@ -36,11 +36,11 @@ def list_permissions(
 @router.get(
     "/roles",
     summary="角色列表",
-    description="分页列出未删除角色。需要 role:manage。",
+    description="分页列出未删除角色。需要 role:read。",
 )
 # 实现：分页列出角色
 def list_roles(
-    current_user: Annotated[User, Depends(require_permission("role:manage"))],
+    current_user: Annotated[User, Depends(require_permission("role:read"))],
     db: Annotated[Session, Depends(get_db)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -52,12 +52,12 @@ def list_roles(
 @router.get(
     "/roles/{role_id}",
     summary="角色详情",
-    description="返回角色及其 permission_codes。需要 role:manage。",
+    description="返回角色及其 permission_codes。需要 role:read。",
 )
 # 实现：角色详情
 def get_role(
     role_id: UUID,
-    current_user: Annotated[User, Depends(require_permission("role:manage"))],
+    current_user: Annotated[User, Depends(require_permission("role:read"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     return success(role_service.get_role(db, role_id=role_id))
@@ -66,12 +66,12 @@ def get_role(
 @router.post(
     "/roles",
     summary="创建角色",
-    description="创建角色（code/name）。需要 role:manage。",
+    description="创建角色（code/name）。需要 role:create。",
 )
 # 实现：创建角色
 def create_role(
     body: RoleCreate,
-    current_user: Annotated[User, Depends(require_permission("role:manage"))],
+    current_user: Annotated[User, Depends(require_permission("role:create"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     return success(role_service.create_role(db, code=body.code, name=body.name))
@@ -80,13 +80,13 @@ def create_role(
 @router.put(
     "/roles/{role_id}",
     summary="更新角色",
-    description="可改 code、name。需要 role:manage。",
+    description="可改 code、name。需要 role:update。",
 )
 # 实现：更新角色
 def update_role(
     role_id: UUID,
     body: RoleUpdate,
-    current_user: Annotated[User, Depends(require_permission("role:manage"))],
+    current_user: Annotated[User, Depends(require_permission("role:update"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     return success(
@@ -99,13 +99,13 @@ def update_role(
 @router.put(
     "/roles/{role_id}/permissions",
     summary="替换角色权限",
-    description="用 permission_codes 整体替换；未知码 404。需要 role:manage。",
+    description="用 permission_codes 整体替换；未知码 404。需要 role:assign_perm。",
 )
 # 实现：整体替换角色权限码
 def replace_role_permissions(
     role_id: UUID,
     body: RolePermissionsUpdate,
-    current_user: Annotated[User, Depends(require_permission("role:manage"))],
+    current_user: Annotated[User, Depends(require_permission("role:assign_perm"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     return success(
@@ -118,12 +118,12 @@ def replace_role_permissions(
 @router.delete(
     "/roles/{role_id}",
     summary="软删除角色",
-    description="仍有未删除用户绑定时返回 409。需要 role:manage。",
+    description="仍有未删除用户绑定时返回 409。需要 role:delete。",
 )
 # 实现：软删除角色
 def delete_role(
     role_id: UUID,
-    current_user: Annotated[User, Depends(require_permission("role:manage"))],
+    current_user: Annotated[User, Depends(require_permission("role:delete"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     role_service.soft_delete_role(db, role_id=role_id)

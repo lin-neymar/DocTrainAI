@@ -1,4 +1,4 @@
-"""E-A：require_permission 集成测试。
+"""require_permission 集成测试。
 
 用临时 mini-app 挂一条假路由，避免污染 app.main 的路由表。
 验证 401（未登录）→ 403（已登录但缺码）→ 200（有码） 的层次。
@@ -36,7 +36,7 @@ def _login_token(client: TestClient, username: str, password: str) -> str:
 
 @pytest.fixture
 def probe_client():
-    """带 login 探针 + 受 dept:manage 保护的路由。"""
+    """带 login 探针 + 受 dept:create 保护的路由。"""
     from app.api.system.auth import login as auth_login
 
     app = FastAPI()
@@ -46,9 +46,9 @@ def probe_client():
     def probe_login(body: LoginRequest, db=Depends(get_db)):
         return auth_login(body, db)
 
-    @app.get("/probe/dept-manage")
-    def probe_dept_manage(
-        _user: Annotated[User, Depends(require_permission("dept:manage"))],
+    @app.get("/probe/dept-create")
+    def probe_dept_create(
+        _user: Annotated[User, Depends(require_permission("dept:create"))],
     ) -> dict:
         return success({"ok": True})
 
@@ -63,7 +63,7 @@ def probe_client():
 
 
 def test_require_permission_no_token_401(probe_client: TestClient) -> None:
-    response = probe_client.get("/probe/dept-manage")
+    response = probe_client.get("/probe/dept-create")
     assert response.status_code == 401
     assert response.json()["code"] == 40100
 
@@ -92,7 +92,7 @@ def test_require_permission_staff_403(probe_client: TestClient) -> None:
 
     token = _login_token(probe_client, staff_name, "staff-pass")
     response = probe_client.get(
-        "/probe/dept-manage",
+        "/probe/dept-create",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 403
@@ -106,7 +106,7 @@ def test_require_permission_admin_200(probe_client: TestClient) -> None:
         settings.init_admin_password,
     )
     response = probe_client.get(
-        "/probe/dept-manage",
+        "/probe/dept-create",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
