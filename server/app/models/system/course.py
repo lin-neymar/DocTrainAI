@@ -1,6 +1,7 @@
-"""培训课程表 ORM（course）与课程-文档关联（course_doc）。
+"""培训课程表 ORM（course）、课程-文档关联（course_doc）、可见组织（course_audience_dept）。
 
-课程归属部门；与文档多对多。删课程不删文档；挂接关系不改变文档可见性（仍只看 doc.dept_id + 权限）。
+课程归属部门；与文档多对多。删课程不删文档；挂接不改变文档可见性。
+阅读规则与文档同构（course:read + audience 子树），算法在 S5 落地。
 """
 
 import uuid
@@ -25,6 +26,7 @@ class Course(Base):
     # 可选简介，管理端展示；不参与权限与检索
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # 归属部门；阅读可见另见 CourseAudienceDept
     dept_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("dept.id"),
@@ -59,5 +61,22 @@ class CourseDoc(Base):
     doc_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("doc.id"),
+        primary_key=True,
+    )
+
+
+class CourseAudienceDept(Base):
+    """课程 ↔ 可见组织节点；选中节点表示其部门子树内人员可读（方案 B）。"""
+
+    __tablename__ = "course_audience_dept"
+
+    course_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("course.id"),
+        primary_key=True,
+    )
+    dept_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("dept.id"),
         primary_key=True,
     )

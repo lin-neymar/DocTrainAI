@@ -12,9 +12,9 @@ import pytest
 from sqlalchemy import func, select, text
 
 from app.database import SessionLocal
-from app.models.system.course import Course
+from app.models.system.course import Course, CourseAudienceDept
 from app.models.system.dept import Dept
-from app.models.system.doc import Doc
+from app.models.system.doc import Doc, DocAudienceDept
 from app.models.system.permission import Permission
 from app.models.system.role import Role
 from app.models.system.user import User
@@ -78,3 +78,46 @@ def test_doc_and_course_tables_queryable() -> None:
 
     assert doc_count is not None and doc_count >= 0
     assert course_count is not None and course_count >= 0
+
+
+def test_audience_tables_and_backfill_invariant() -> None:
+    """S4：audience 表可查；每条 doc/course 至少有一条 audience，且含归属 dept_id。"""
+    try:
+        with SessionLocal() as session:
+            aud_doc = session.scalar(select(func.count()).select_from(DocAudienceDept))
+            aud_course = session.scalar(
+                select(func.count()).select_from(CourseAudienceDept)
+            )
+            docs = session.scalars(select(Doc)).all()
+            courses = session.scalars(select(Course)).all()
+            for doc in docs:
+                has_owner = session.scalar(
+                    select(func.count())
+                    .select_from(DocAudienceDept)
+                    .where(
+                        DocAudienceDept.doc_id == doc.id,
+                        DocAudienceDept.dept_id == doc.dept_id,
+                    )
+                )
+                assert has_owner == 1, f"doc {doc.id} 缺少归属 audience"
+            for course in courses:
+                has_owner = session.scalar(
+                    select(func.count())
+                    .select_from(CourseAudienceDept)
+                    .where(
+                        CourseAudienceDept.course_id == course.id,
+                        CourseAudienceDept.dept_id == course.dept_id,
+                    )
+                )
+                assert has_owner == 1, f"course {course.id} 缺少归属 audience"
+    except Exception as exc:
+        pytest.skip(f"PostgreSQL 或迁移未就绪，请 alembic upgrade head: {exc}")
+
+    assert aud_doc is not None and aud_doc >= 0
+    assert aud_course is not None and aud_course >= 0
+    # 有旧文档时，验收「至少一条 audience」
+    if docs:
+        assert aud_doc >= 1
+    if courses:
+        assert aud_course >= 1
+

@@ -1,7 +1,8 @@
-"""制度文档元数据表 ORM（doc）。
+"""制度文档元数据表 ORM（doc）与可见组织关联（doc_audience_dept）。
 
 阶段 1 只存身份与文件元数据 + 磁盘上的原文件（storage_key）；不存正文、解析状态、向量。
-可见性由 dept_id + get_visible_doc_ids 决定，与是否挂到课程无关。
+dept_id = 归属部门；doc_audience_dept 的每行 dept_id = 可见组织节点（该节点子树可读）。
+阅读算法在 S5 改写 get_visible_doc_ids；与是否挂到课程无关。
 """
 
 import uuid
@@ -23,6 +24,7 @@ class Doc(Base):
         default=uuid.uuid4,
     )
     title: Mapped[str] = mapped_column(String(256), nullable=False)
+    # 归属部门（管理落点）；阅读可见另见 DocAudienceDept
     dept_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("dept.id"),
@@ -54,4 +56,21 @@ class Doc(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+
+class DocAudienceDept(Base):
+    """文档 ↔ 可见组织节点；选中节点表示其部门子树内人员可读（方案 B）。"""
+
+    __tablename__ = "doc_audience_dept"
+
+    doc_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("doc.id"),
+        primary_key=True,
+    )
+    dept_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("dept.id"),
+        primary_key=True,
     )
