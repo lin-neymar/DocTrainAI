@@ -1,5 +1,5 @@
 /**
- * 课程接口：列表/详情需 course:read；写与挂文档需 course:manage。
+ * 课程接口：读 course:read；写 create/update/delete；挂文档 course:attach_doc。
  * 挂接不放大文档权限：doc 须落在操作者可见集合（后端校验）。
  */
 import { request } from '@/utils/request'

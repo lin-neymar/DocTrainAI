@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
- * W6 文档管理：可见列表 + 上传/改元数据/下载/软删。
- * 路由 doc:read；上传与编辑按钮 doc:upload；删除按钮 doc:delete。
+ * 文档管理：路由 doc:read；上传 doc:create；编辑 doc:update；删除 doc:delete。
  * 数据范围与可见性不在前端计算；不展示解析状态（阶段 2）。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -42,7 +41,8 @@ const pageSize = ref(20)
 const deptOptions = ref<{ id: string; label: string }[]>([])
 const deptNameMap = ref<Record<string, string>>({})
 
-const canUpload = computed(() => hasPermission('doc:upload'))
+const canCreate = computed(() => hasPermission('doc:create'))
+const canUpdate = computed(() => hasPermission('doc:update'))
 const canDelete = computed(() => hasPermission('doc:delete'))
 
 const uploadVisible = ref(false)
@@ -142,7 +142,7 @@ function formatSize(bytes: number) {
 }
 
 function openUpload() {
-  if (!canUpload.value) return
+  if (!canCreate.value) return
   uploadForm.title = ''
   uploadForm.dept_id = deptOptions.value[0]?.id ?? ''
   uploadForm.file = null
@@ -151,7 +151,7 @@ function openUpload() {
 }
 
 function openEdit(row: unknown) {
-  if (!canUpload.value) return
+  if (!canUpdate.value) return
   const d = asDoc(row)
   editingId.value = d.id
   editForm.title = d.title
@@ -295,7 +295,7 @@ onMounted(async () => {
       <span class="hint">仅展示当前可见文档；阶段 1 不解析正文、不显示解析状态</span>
       <div class="toolbar-right">
         <ElButton :loading="loading" @click="loadDocs">刷新</ElButton>
-        <ElButton v-if="canUpload" type="primary" @click="openUpload">上传文档</ElButton>
+        <ElButton v-if="canCreate" type="primary" @click="openUpload">上传文档</ElButton>
       </div>
     </div>
 
@@ -318,7 +318,7 @@ onMounted(async () => {
         <ElTableColumn label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <ElButton link type="primary" @click="onDownload(row)">下载</ElButton>
-            <ElButton v-if="canUpload" link type="primary" @click="openEdit(row)">编辑</ElButton>
+            <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">编辑</ElButton>
             <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">删除</ElButton>
           </template>
         </ElTableColumn>

@@ -1,4 +1,4 @@
-/** 部门接口：树（只读登录即可）+ 写操作需后端 dept:manage */
+/** 部门接口：读需 dept:read；写需 dept:create / update / delete */
 import { request } from '@/utils/request'
 
 export interface DeptItem {

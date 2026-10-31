@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /**
- * W4 用户管理：分页列表 + 创建/编辑/重置密码/软删。
- * 路由与写操作均需 user:manage；部门选项来自 /depts/tree（范围由后端裁）。
- * 角色勾选仅在持有 role:manage 时拉取 /roles；否则不改动已有 role_ids。
+ * 用户管理：路由 user:read；写按钮拆 create/update/delete/reset_password。
+ * 角色勾选依赖 role:read（拉 /roles）；无该码则创建角色空、编辑不传 role_ids。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -52,8 +51,12 @@ const roleNameMap = computed(() => {
   return map
 })
 
-/** 能否拉角色列表并在表单里改 role_ids（与后端 GET /roles 一致） */
-const canAssignRoles = computed(() => hasPermission('role:manage'))
+/** 能否拉角色列表并在表单里改 role_ids（与后端 GET /roles → role:read 一致） */
+const canAssignRoles = computed(() => hasPermission('role:read'))
+const canCreate = computed(() => hasPermission('user:create'))
+const canUpdate = computed(() => hasPermission('user:update'))
+const canDelete = computed(() => hasPermission('user:delete'))
+const canResetPassword = computed(() => hasPermission('user:reset_password'))
 
 const dialogVisible = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
@@ -134,7 +137,7 @@ async function loadDepts() {
   deptNameMap.value = names
 }
 
-// 实现：有 role:manage 时拉取角色供多选；否则跳过
+// 实现：有 role:read 时拉取角色供多选；否则跳过
 async function loadRolesIfAllowed() {
   if (!canAssignRoles.value) {
     roles.value = []
@@ -197,7 +200,7 @@ function openResetPwd(row: unknown) {
   pwdDialogVisible.value = true
 }
 
-// 实现：提交创建或更新（无 role:manage 时更新不传 role_ids）
+// 实现：提交创建或更新（无 role:read 时更新不传 role_ids）
 async function onSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
@@ -205,6 +208,7 @@ async function onSubmit() {
   dialogLoading.value = true
   try {
     if (dialogMode.value === 'create') {
+      if (!canCreate.value) return
       await createUserApi({
         username: form.username.trim(),
         password: form.password,
@@ -213,6 +217,7 @@ async function onSubmit() {
       })
       ElMessage.success('创建成功')
     } else if (editingId.value) {
+      if (!canUpdate.value) return
       const body: {
         username: string
         dept_id: string
@@ -239,7 +244,7 @@ async function onSubmit() {
 // 实现：管理员重置密码
 async function onResetPwd() {
   const valid = await pwdFormRef.value?.validate().catch(() => false)
-  if (!valid || !pwdUserId.value) return
+  if (!valid || !pwdUserId.value || !canResetPassword.value) return
 
   pwdLoading.value = true
   try {
@@ -255,6 +260,7 @@ async function onResetPwd() {
 
 // 实现：软删除用户（禁止删自己）
 async function onDelete(row: unknown) {
+  if (!canDelete.value) return
   const u = asUser(row)
   if (u.id === userStore.userId) {
     ElMessage.warning('不能删除当前登录账号')
@@ -324,7 +330,7 @@ onMounted(async () => {
       <span class="hint">列表已按数据范围过滤；安全边界在后端</span>
       <div class="toolbar-right">
         <ElButton :loading="loading" @click="loadUsers">刷新</ElButton>
-        <ElButton type="primary" @click="openCreate">新增用户</ElButton>
+        <ElButton v-if="canCreate" type="primary" @click="openCreate">新增用户</ElButton>
       </div>
     </div>
 
@@ -353,11 +359,31 @@ onMounted(async () => {
           </template>
         </ElTableColumn>
         <ElTableColumn prop="created_at" label="创建时间" min-width="170" />
-        <ElTableColumn label="操作" width="240" fixed="right">
+        <ElTableColumn
+          v-if="canUpdate || canResetPassword || canDelete"
+          label="操作"
+          width="240"
+          fixed="right"
+        >
           <template #default="{ row }">
-            <ElButton link type="primary" @click="openEdit(row)">编辑</ElButton>
-            <ElButton link type="primary" @click="openResetPwd(row)">重置密码</ElButton>
-            <ElButton link type="danger" :disabled="isSelf(row)" @click="onDelete(row)">
+            <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">
+              编辑
+            </ElButton>
+            <ElButton
+              v-if="canResetPassword"
+              link
+              type="primary"
+              @click="openResetPwd(row)"
+            >
+              重置密码
+            </ElButton>
+            <ElButton
+              v-if="canDelete"
+              link
+              type="danger"
+              :disabled="isSelf(row)"
+              @click="onDelete(row)"
+            >
               删除
             </ElButton>
           </template>
@@ -427,7 +453,7 @@ onMounted(async () => {
           </ElSelect>
         </ElFormItem>
         <p v-else class="field-tip">
-          当前账号无 role:manage，无法拉取/勾选角色；创建时角色为空，编辑时不改动原角色。
+          当前账号无 role:read，无法拉取/勾选角色；创建时角色为空，编辑时不改动原角色。
         </p>
       </ElForm>
       <template #footer>

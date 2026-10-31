@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /**
- * W5 角色管理：分页列表 + 创建/编辑 + 整体替换权限码 + 软删。
- * 路由需 role:manage；权限清单来自 GET /permissions（DB），禁止写死 seed 常量。
- * 鉴权展示与勾选只认 permission code，不按角色名/code 写业务分支。
+ * 角色管理：路由 role:assign_perm；写按钮拆 create/update/delete；配权用 assign_perm。
+ * 权限清单来自 GET /permissions（DB），禁止写死 seed 常量。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -32,6 +31,12 @@ import {
   type PermissionItem,
   type RoleItem,
 } from '@/api/system/role'
+import { hasPermission } from '@/utils/permission'
+
+const canCreate = computed(() => hasPermission('role:create'))
+const canUpdate = computed(() => hasPermission('role:update'))
+const canDelete = computed(() => hasPermission('role:delete'))
+const canAssignPerm = computed(() => hasPermission('role:assign_perm'))
 
 const loading = ref(false)
 const roles = ref<RoleItem[]>([])
@@ -91,6 +96,7 @@ function asRole(row: unknown): RoleItem {
 }
 
 function openCreate() {
+  if (!canCreate.value) return
   dialogMode.value = 'create'
   editingId.value = null
   form.code = ''
@@ -100,6 +106,7 @@ function openCreate() {
 }
 
 function openEdit(row: unknown) {
+  if (!canUpdate.value && !canAssignPerm.value) return
   const r = asRole(row)
   dialogMode.value = 'edit'
   editingId.value = r.id
@@ -121,15 +128,18 @@ async function onSubmit() {
     let roleId = editingId.value
 
     if (dialogMode.value === 'create') {
+      if (!canCreate.value) return
       const created = await createRoleApi({ code, name })
       roleId = created.id
       ElMessage.success('创建成功')
     } else if (roleId) {
-      await updateRoleApi(roleId, { code, name })
-      ElMessage.success('更新成功')
+      if (canUpdate.value) {
+        await updateRoleApi(roleId, { code, name })
+        ElMessage.success('更新成功')
+      }
     }
 
-    if (roleId) {
+    if (roleId && canAssignPerm.value) {
       await replaceRolePermissionsApi(roleId, form.permission_codes)
     }
 
@@ -144,6 +154,7 @@ async function onSubmit() {
 
 // 实现：软删除角色（仍有用户绑定时后端 409）
 async function onDelete(row: unknown) {
+  if (!canDelete.value) return
   const r = asRole(row)
   try {
     await ElMessageBox.confirm(
@@ -200,7 +211,7 @@ onMounted(async () => {
       <span class="hint">权限码来自数据库；业务只认 code，不认角色名称</span>
       <div class="toolbar-right">
         <ElButton :loading="loading" @click="loadRoles">刷新</ElButton>
-        <ElButton type="primary" @click="openCreate">新增角色</ElButton>
+        <ElButton v-if="canCreate" type="primary" @click="openCreate">新增角色</ElButton>
       </div>
     </div>
 
@@ -226,10 +237,24 @@ onMounted(async () => {
           </template>
         </ElTableColumn>
         <ElTableColumn prop="updated_at" label="更新时间" min-width="170" />
-        <ElTableColumn label="操作" width="160" fixed="right">
+        <ElTableColumn
+          v-if="canUpdate || canAssignPerm || canDelete"
+          label="操作"
+          width="160"
+          fixed="right"
+        >
           <template #default="{ row }">
-            <ElButton link type="primary" @click="openEdit(row)">编辑</ElButton>
-            <ElButton link type="danger" @click="onDelete(row)">删除</ElButton>
+            <ElButton
+              v-if="canUpdate || canAssignPerm"
+              link
+              type="primary"
+              @click="openEdit(row)"
+            >
+              编辑
+            </ElButton>
+            <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">
+              删除
+            </ElButton>
           </template>
         </ElTableColumn>
       </ElTable>

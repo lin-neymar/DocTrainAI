@@ -1,4 +1,4 @@
-/** 用户接口：均需后端 user:manage，列表已按数据范围过滤 */
+/** 用户接口：读 user:read；写拆 create/update/delete/reset_password */
 import { request } from '@/utils/request'
 
 import type { PageResult } from './types'

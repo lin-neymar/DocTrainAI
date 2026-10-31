@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * W3 部门管理：树对已登录只读开放；增删改按钮用 hasPermission('dept:manage')。
+ * 部门管理：路由 dept:read；写按钮拆 dept:create / update / delete。
  * 创建根部门另需 data:scope:all（与后端一致）；数据范围不在前端计算。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -32,9 +32,11 @@ const loading = ref(false)
 const selectedId = ref<string | null>(null)
 const selectedName = ref('')
 
-const canManage = computed(() => hasPermission('dept:manage'))
+const canCreate = computed(() => hasPermission('dept:create'))
+const canUpdate = computed(() => hasPermission('dept:update'))
+const canDelete = computed(() => hasPermission('dept:delete'))
 const canCreateRoot = computed(
-  () => canManage.value && hasPermission('data:scope:all'),
+  () => canCreate.value && hasPermission('data:scope:all'),
 )
 
 const treeProps = { label: 'name', children: 'children' } as const
@@ -127,7 +129,7 @@ function onNodeClick(data: DeptTreeNode) {
 
 // 实现：打开新增对话框（parentId 为 null 表示根部门）
 function openCreate(parentId: string | null) {
-  if (!canManage.value) return
+  if (!canCreate.value) return
   if (parentId === null && !canCreateRoot.value) {
     ElMessage.warning('创建根部门需要 data:scope:all')
     return
@@ -140,7 +142,7 @@ function openCreate(parentId: string | null) {
 
 // 实现：打开编辑对话框
 function openEdit() {
-  if (!canManage.value || !selectedId.value) return
+  if (!canUpdate.value || !selectedId.value) return
   const node = findNode(treeData.value, selectedId.value)
   if (!node) return
   dialogMode.value = 'edit'
@@ -182,7 +184,7 @@ async function onSubmit() {
 
 // 实现：确认后软删除选中部门
 async function onDelete() {
-  if (!canManage.value || !selectedId.value) return
+  if (!canDelete.value || !selectedId.value) return
   try {
     await ElMessageBox.confirm(
       `确定删除部门「${selectedName.value}」？有下级或用户时将被拒绝。`,
@@ -217,27 +219,34 @@ onMounted(() => {
       </div>
       <div class="toolbar-right">
         <ElButton :loading="loading" @click="loadTree">刷新</ElButton>
-        <template v-if="canManage">
-          <ElButton
-            v-if="canCreateRoot"
-            type="primary"
-            plain
-            @click="openCreate(null)"
-          >
-            新增根部门
-          </ElButton>
-          <ElButton
-            type="primary"
-            :disabled="!selectedId"
-            @click="openCreate(selectedId)"
-          >
-            新增子部门
-          </ElButton>
-          <ElButton :disabled="!selectedId" @click="openEdit">编辑</ElButton>
-          <ElButton type="danger" plain :disabled="!selectedId" @click="onDelete">
-            删除
-          </ElButton>
-        </template>
+        <ElButton
+          v-if="canCreateRoot"
+          type="primary"
+          plain
+          @click="openCreate(null)"
+        >
+          新增根部门
+        </ElButton>
+        <ElButton
+          v-if="canCreate"
+          type="primary"
+          :disabled="!selectedId"
+          @click="openCreate(selectedId)"
+        >
+          新增子部门
+        </ElButton>
+        <ElButton v-if="canUpdate" :disabled="!selectedId" @click="openEdit">
+          编辑
+        </ElButton>
+        <ElButton
+          v-if="canDelete"
+          type="danger"
+          plain
+          :disabled="!selectedId"
+          @click="onDelete"
+        >
+          删除
+        </ElButton>
       </div>
     </div>
 

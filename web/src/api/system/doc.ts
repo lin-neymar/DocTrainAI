@@ -1,5 +1,5 @@
 /**
- * 文档接口：列表/下载需 doc:read；上传与改元数据需 doc:upload；软删需 doc:delete。
+ * 文档接口：列表/下载 doc:read；上传 doc:create；改元数据 doc:update；软删 doc:delete。
  * 可见性由后端 get_visible_doc_ids 裁剪；阶段 1 不展示解析状态。
  */
 import { request, type BlobDownload } from '@/utils/request'

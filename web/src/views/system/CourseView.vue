@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
- * W7 课程管理：范围内列表 + 创建/编辑/软删 + 整体替换挂接文档。
- * 路由 course:read；写操作按钮用 course:manage。
+ * 课程管理：路由 course:read；写拆 create/update/delete；挂接 course:attach_doc。
  * 挂接文档选项来自可见文档列表；不在前端计算数据范围。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -49,8 +48,14 @@ const docTitleMap = computed(() => {
   return map
 })
 
-const canManage = computed(() => hasPermission('course:manage'))
+const canCreate = computed(() => hasPermission('course:create'))
+const canUpdate = computed(() => hasPermission('course:update'))
+const canDelete = computed(() => hasPermission('course:delete'))
+const canAttach = computed(() => hasPermission('course:attach_doc'))
 const canReadDocs = computed(() => hasPermission('doc:read'))
+const canAnyWrite = computed(
+  () => canCreate.value || canUpdate.value || canDelete.value || canAttach.value,
+)
 
 const formVisible = ref(false)
 const formMode = ref<'create' | 'edit'>('create')
@@ -144,7 +149,7 @@ function docLabels(row: unknown) {
 }
 
 function openCreate() {
-  if (!canManage.value) return
+  if (!canCreate.value) return
   formMode.value = 'create'
   editingId.value = null
   form.title = ''
@@ -154,7 +159,7 @@ function openCreate() {
 }
 
 function openEdit(row: unknown) {
-  if (!canManage.value) return
+  if (!canUpdate.value) return
   const c = asCourse(row)
   formMode.value = 'edit'
   editingId.value = c.id
@@ -165,7 +170,7 @@ function openEdit(row: unknown) {
 }
 
 async function openAttachDocs(row: unknown) {
-  if (!canManage.value) return
+  if (!canAttach.value) return
   const c = asCourse(row)
   docsCourseId.value = c.id
   docsCourseTitle.value = c.title
@@ -229,7 +234,7 @@ async function onSubmitDocs() {
 
 // 实现：软删除课程（不删已挂接文档）
 async function onDelete(row: unknown) {
-  if (!canManage.value) return
+  if (!canDelete.value) return
   const c = asCourse(row)
   try {
     await ElMessageBox.confirm(
@@ -282,7 +287,7 @@ onMounted(async () => {
       <span class="hint">挂接文档不放大文档权限；删课程不删文档</span>
       <div class="toolbar-right">
         <ElButton :loading="loading" @click="loadCourses">刷新</ElButton>
-        <ElButton v-if="canManage" type="primary" @click="openCreate">新增课程</ElButton>
+        <ElButton v-if="canCreate" type="primary" @click="openCreate">新增课程</ElButton>
       </div>
     </div>
 
@@ -316,11 +321,17 @@ onMounted(async () => {
           </template>
         </ElTableColumn>
         <ElTableColumn prop="updated_at" label="更新时间" min-width="170" />
-        <ElTableColumn v-if="canManage" label="操作" width="220" fixed="right">
+        <ElTableColumn v-if="canAnyWrite" label="操作" width="220" fixed="right">
           <template #default="{ row }">
-            <ElButton link type="primary" @click="openEdit(row)">编辑</ElButton>
-            <ElButton link type="primary" @click="openAttachDocs(row)">挂接文档</ElButton>
-            <ElButton link type="danger" @click="onDelete(row)">删除</ElButton>
+            <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">
+              编辑
+            </ElButton>
+            <ElButton v-if="canAttach" link type="primary" @click="openAttachDocs(row)">
+              挂接文档
+            </ElButton>
+            <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">
+              删除
+            </ElButton>
           </template>
         </ElTableColumn>
       </ElTable>

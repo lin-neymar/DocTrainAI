@@ -1,6 +1,5 @@
 /**
- * 角色 / 权限接口（均需后端 role:manage）。
- * 业务分支只认 permission code，不认 role.code / 角色中文名。
+ * 角色 / 权限接口：列表 role:read；配权与权限清单 role:assign_perm；写拆 create/update/delete。
  */
 import { request } from '@/utils/request'
 
