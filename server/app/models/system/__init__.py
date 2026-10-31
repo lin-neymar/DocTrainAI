@@ -9,6 +9,7 @@ from app.models.system.dept import Dept
 from app.models.system.doc import Doc
 from app.models.system.permission import Permission
 from app.models.system.role import Role, RolePermission
+from app.models.system.system_brand import SystemBrand
 from app.models.system.user import User, UserRole
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "Permission",
     "Role",
     "RolePermission",
+    "SystemBrand",
     "User",
     "UserRole",
 ]

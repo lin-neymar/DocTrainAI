@@ -32,6 +32,9 @@ class User(Base):
         nullable=False,
     )
 
+    # T1：个人主题主色（如 #1F4B7A）；空则前端用默认色
+    theme_primary: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     created_at: Mapped[datetime] = mapped_column(
