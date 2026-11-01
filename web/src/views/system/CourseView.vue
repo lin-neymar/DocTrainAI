@@ -51,6 +51,8 @@ const courses = ref<CourseItem[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const filterTitle = ref('')
+const appliedTitle = ref('')
 
 const deptTree = ref<DeptTreeNode[]>([])
 const deptNameMap = ref<Record<string, string>>({})
@@ -147,11 +149,15 @@ async function loadVisibleDocs() {
   visibleDocs.value = data.items
 }
 
-// 实现：分页拉取课程列表
+// 实现：分页拉取课程列表（带已应用的标题条件）
 async function loadCourses() {
   loading.value = true
   try {
-    const data = await fetchCoursesApi(page.value, pageSize.value)
+    const data = await fetchCoursesApi({
+      page: page.value,
+      pageSize: pageSize.value,
+      title: appliedTitle.value || undefined,
+    })
     courses.value = data.items
     total.value = data.total
     page.value = data.page
@@ -159,6 +165,21 @@ async function loadCourses() {
   } finally {
     loading.value = false
   }
+}
+
+// 实现：按标题查询并回到第 1 页
+async function onSearch() {
+  appliedTitle.value = filterTitle.value.trim()
+  page.value = 1
+  await loadCourses()
+}
+
+// 实现：清空标题搜索
+async function onResetFilters() {
+  filterTitle.value = ''
+  appliedTitle.value = ''
+  page.value = 1
+  await loadCourses()
 }
 
 function asCourse(row: unknown): CourseItem {
@@ -358,7 +379,19 @@ onMounted(async () => {
 <template>
   <div class="course-page">
     <div class="toolbar">
-      <span class="hint">挂接文档不放大文档权限；勾选组织节点表示该节点子树可读</span>
+      <div class="filters">
+        <ElInput
+          v-model="filterTitle"
+          clearable
+          placeholder="标题"
+          class="filter-title"
+          maxlength="256"
+          @keyup.enter="onSearch"
+        />
+        <ElButton type="primary" :loading="loading" @click="onSearch">查询</ElButton>
+        <ElButton :disabled="loading" @click="onResetFilters">重置</ElButton>
+        <span class="hint">挂接文档不放大文档权限</span>
+      </div>
       <div class="toolbar-right">
         <ElButton :loading="loading" @click="loadCourses">刷新</ElButton>
         <ElButton v-if="canCreate" type="primary" @click="openCreate">新增课程</ElButton>
@@ -557,6 +590,21 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.filters :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.filter-title {
+  width: 200px;
 }
 
 .hint {

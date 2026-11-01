@@ -86,7 +86,7 @@ SSE 的读取放在 `utils/sse.ts`。组件只消费已经解析好的 `delta`�
 | 用户管理 | `user:read`；写按钮对应 `user:create` 等；重置密码 `user:reset_password`；角色勾选依赖 `role:read`；有 `user:delete` 时表格多选 + 批量删除（当前页） |
 | 角色管理 | `role:assign_perm`（仅配置权限与角色维护入口）；无此码不进菜单。`role:read` 供其他页拉列表 |
 | 文档管理 | `doc:read`；上传 `doc:create`；编辑 `doc:update`；删除 `doc:delete`；查看预览（`doc:read`）；标题搜索；有 `doc:delete` 时多选批量删 |
-| 课程管理 | `course:read`；创建/编辑 `course:create`/`course:update`；删除 `course:delete`；挂接 `course:attach_doc` |
+| 课程管理 | `course:read`；创建/编辑 `course:create`/`course:update`；删除 `course:delete`；挂接 `course:attach_doc`；标题搜索 |
 | 系统设置 | 已登录即可（无 `meta.permission`）；页内品牌区 `system:read` / `system:update` |
 | 个人主题 T1 | 无独立路由权限；设置页内已登录可改 |
 

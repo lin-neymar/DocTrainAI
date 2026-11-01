@@ -31,11 +31,22 @@ export interface CourseUpdateBody {
   audience_dept_ids?: string[]
 }
 
-// 实现：GET /api/v1/courses 分页列表
-export function fetchCoursesApi(page: number, pageSize: number) {
-  return request.get<unknown, PageResult<CourseItem>>('/api/v1/courses', {
-    params: { page, page_size: pageSize },
-  })
+export interface CourseListQuery {
+  page: number
+  pageSize: number
+  /** 标题模糊筛选（可选） */
+  title?: string
+}
+
+// 实现：GET /api/v1/courses 分页列表（可选 title）
+export function fetchCoursesApi(query: CourseListQuery) {
+  const params: Record<string, string | number> = {
+    page: query.page,
+    page_size: query.pageSize,
+  }
+  const title = query.title?.trim()
+  if (title) params.title = title
+  return request.get<unknown, PageResult<CourseItem>>('/api/v1/courses', { params })
 }
 
 // 实现：POST /api/v1/courses
