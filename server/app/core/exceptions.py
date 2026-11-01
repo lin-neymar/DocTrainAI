@@ -34,7 +34,7 @@ class UnauthorizedError(AppException):
 
     http_status = 401
     code = 40100
-    default_message = "unauthorized"
+    default_message = "未登录或登录已失效"
 
 
 class ForbiddenError(AppException):

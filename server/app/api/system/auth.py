@@ -31,7 +31,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def login(body: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> dict:
     user = auth_service.authenticate_user(db, body.username, body.password)
     if user is None:
-        raise UnauthorizedError("invalid username or password")
+        raise UnauthorizedError("用户名或密码错误")
 
     token = create_access_token(user_id=user.id)
     return success(LoginResponseData(access_token=token).model_dump())
