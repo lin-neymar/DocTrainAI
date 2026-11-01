@@ -228,3 +228,26 @@ def soft_delete_user(
     user = _require_user_in_scope(session, operator_id, user_id)
     user.is_deleted = True
     session.commit()
+
+
+# 实现：批量软删除（先全部校验再提交；跳过自己；仅含自己时 409）
+def soft_delete_users(
+    session: Session, *, operator_id: uuid.UUID, user_ids: list[uuid.UUID]
+) -> dict:
+    unique_ids = list(dict.fromkeys(user_ids))
+    skipped_self = operator_id in unique_ids
+    targets = [uid for uid in unique_ids if uid != operator_id]
+    if not targets:
+        raise ConflictError("不能删除当前登录用户")
+
+    users: list[User] = []
+    for uid in targets:
+        users.append(_require_user_in_scope(session, operator_id, uid))
+
+    for user in users:
+        user.is_deleted = True
+    session.commit()
+    return {
+        "deleted_count": len(users),
+        "skipped_self": skipped_self,
+    }

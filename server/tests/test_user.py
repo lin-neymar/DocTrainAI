@@ -113,6 +113,51 @@ def test_cannot_delete_self(admin_headers: dict[str, str]) -> None:
     assert resp.json()["code"] == 40900
 
 
+def test_batch_delete_users(admin_headers: dict[str, str]) -> None:
+    """批量删除：成功删多人；含自己时跳过自己；仅自己则 409。"""
+    root_id, staff_role_id = _root_and_staff_role()
+    created_ids: list[str] = []
+    for _ in range(2):
+        username = f"u_batch_{uuid.uuid4().hex[:8]}"
+        created = client.post(
+            "/api/v1/users",
+            headers=admin_headers,
+            json={
+                "username": username,
+                "password": "pass1234",
+                "dept_id": root_id,
+                "role_ids": [staff_role_id],
+            },
+        )
+        assert created.status_code == 200
+        created_ids.append(created.json()["data"]["id"])
+
+    me = client.get("/api/v1/auth/me", headers=admin_headers)
+    my_id = me.json()["data"]["user"]["id"]
+
+    only_self = client.post(
+        "/api/v1/users/batch-delete",
+        headers=admin_headers,
+        json={"ids": [my_id]},
+    )
+    assert only_self.status_code == 409
+    assert only_self.json()["code"] == 40900
+
+    mixed = client.post(
+        "/api/v1/users/batch-delete",
+        headers=admin_headers,
+        json={"ids": [created_ids[0], my_id, created_ids[1]]},
+    )
+    assert mixed.status_code == 200
+    data = mixed.json()["data"]
+    assert data["deleted_count"] == 2
+    assert data["skipped_self"] is True
+
+    for uid in created_ids:
+        assert client.get(f"/api/v1/users/{uid}", headers=admin_headers).status_code == 404
+    assert client.get("/api/v1/auth/me", headers=admin_headers).status_code == 200
+
+
 def test_list_users_search_by_username(admin_headers: dict[str, str]) -> None:
     """按用户名模糊筛选（仍受数据范围约束）。"""
     root_id, staff_role_id = _root_and_staff_role()

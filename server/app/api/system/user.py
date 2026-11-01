@@ -11,7 +11,12 @@ from app.core.response import success
 from app.database import get_db
 from app.models.system.user import User
 from app.schemas.common import page_data
-from app.schemas.system.user import UserCreate, UserPasswordReset, UserUpdate
+from app.schemas.system.user import (
+    UserBatchDelete,
+    UserCreate,
+    UserPasswordReset,
+    UserUpdate,
+)
 from app.services.system import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -120,6 +125,23 @@ def reset_password(
         new_password=body.password,
     )
     return success()
+
+
+@router.post(
+    "/batch-delete",
+    summary="批量软删除用户",
+    description="需要 user:delete；跳过自己；任一目标越范围则整批不删并 404。",
+)
+# 实现：批量软删除用户
+def batch_delete_users(
+    body: UserBatchDelete,
+    current_user: Annotated[User, Depends(require_permission("user:delete"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    data = user_service.soft_delete_users(
+        db, operator_id=current_user.id, user_ids=body.ids
+    )
+    return success(data)
 
 
 @router.delete(

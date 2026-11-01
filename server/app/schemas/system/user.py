@@ -23,6 +23,12 @@ class UserPasswordReset(BaseModel):
     password: str = Field(min_length=6, max_length=128)
 
 
+class UserBatchDelete(BaseModel):
+    """批量软删除：ids 去重后处理，上限与列表 page_size 对齐。"""
+
+    ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
 class UserResponse(BaseModel):
     id: UUID
     username: str

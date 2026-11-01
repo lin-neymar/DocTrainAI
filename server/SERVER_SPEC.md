@@ -120,7 +120,7 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 - `GET /health`：不鉴权。
 - `POST /auth/login`、`POST /auth/logout`、`GET /auth/me`：`/me` 须包含 `permission_codes`，以及个人 `theme_primary`（可空）。
 - 部门：读需 `dept:read`；写需对应 `dept:create|update|delete`，并受管理范围约束。
-- 用户：读需 `user:read`；写需对应细码；`PUT /users/{id}/password` 需 `user:reset_password`；均受管理范围约束。创建/更新可传 `role_ids`（操作者有 `user:update` 即可；拉角色列表另需 `role:read`）。
+- 用户：读需 `user:read`；写需对应细码；`PUT /users/{id}/password` 需 `user:reset_password`；`POST /users/batch-delete`（body: `ids`，最多 100）需 `user:delete`，跳过自己，越范围整批失败；均受管理范围约束。创建/更新可传 `role_ids`（操作者有 `user:update` 即可；拉角色列表另需 `role:read`）。
 - 角色：读需 `role:read`；写需对应细码；`GET /permissions` 与 `PUT /roles/{id}/permissions` 需 `role:assign_perm`。
 - 文档：读/下载需 `doc:read` + `get_visible_doc_ids`；上传 `doc:create`；改元数据与 audience `doc:update`；软删 `doc:delete`。写路径归属部门受管理范围约束。
 - 课程：读需 `course:read` + 课程 audience 规则；写拆细码；`PUT /courses/{id}/docs` 需 `course:attach_doc`，文档须对操作者可见。
