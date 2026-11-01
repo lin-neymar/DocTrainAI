@@ -62,6 +62,34 @@ def test_docs_require_auth() -> None:
     assert client.get("/api/v1/docs").status_code == 401
 
 
+def test_list_docs_filter_by_title(admin_headers: dict[str, str]) -> None:
+    """列表可选 title 模糊筛选；仅匹配可见文档标题。"""
+    root_id = _root_dept_id()
+    marker = uuid.uuid4().hex[:8]
+    title_hit = f"规章命中-{marker}"
+    title_miss = f"其它文档-{marker}"
+
+    for title, name in ((title_hit, "hit.md"), (title_miss, "miss.md")):
+        created = client.post(
+            "/api/v1/docs",
+            headers=admin_headers,
+            data={"title": title, "dept_id": root_id},
+            files={"file": (name, _MD_BYTES, "text/markdown")},
+        )
+        assert created.status_code == 200, created.text
+
+    listed = client.get(
+        "/api/v1/docs",
+        headers=admin_headers,
+        params={"page": 1, "page_size": 100, "title": f"命中-{marker}"},
+    )
+    assert listed.status_code == 200
+    items = listed.json()["data"]["items"]
+    titles = {item["title"] for item in items}
+    assert title_hit in titles
+    assert title_miss not in titles
+
+
 def test_upload_list_download_update_delete(admin_headers: dict[str, str]) -> None:
     root_id = _root_dept_id()
     title = f"规章-{uuid.uuid4().hex[:8]}"

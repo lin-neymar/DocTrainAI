@@ -144,27 +144,40 @@ def _replace_audience(
         session.add(DocAudienceDept(doc_id=doc_id, dept_id=dept_id))
 
 
-# 实现：分页列出当前用户可见文档
+# 实现：转义 ILIKE 通配符，避免用户输入 %/_ 扩大匹配
+def _ilike_pattern(raw: str) -> str:
+    escaped = (
+        raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    )
+    return f"%{escaped}%"
+
+
+# 实现：分页列出当前用户可见文档（可选 title 模糊筛选）
 def list_docs(
     session: Session,
     *,
     operator_id: uuid.UUID,
     page: int,
     page_size: int,
+    title: str | None = None,
 ) -> tuple[list[dict], int]:
     visible = list(_visible_set(session, operator_id))
     if not visible:
         return [], 0
 
+    conditions = [Doc.id.in_(visible), Doc.is_deleted.is_(False)]
+    if title is not None:
+        cleaned = title.strip()
+        if cleaned:
+            conditions.append(Doc.title.ilike(_ilike_pattern(cleaned), escape="\\"))
+
     total = (
-        session.scalar(
-            select(func.count()).select_from(Doc).where(Doc.id.in_(visible))
-        )
+        session.scalar(select(func.count()).select_from(Doc).where(*conditions))
         or 0
     )
     rows = session.scalars(
         select(Doc)
-        .where(Doc.id.in_(visible))
+        .where(*conditions)
         .order_by(Doc.created_at.desc(), Doc.id)
         .offset(page_offset(page, page_size))
         .limit(page_size)

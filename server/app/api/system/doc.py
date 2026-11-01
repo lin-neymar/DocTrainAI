@@ -48,7 +48,10 @@ def _parse_audience_form(raw: str | None) -> tuple[list[UUID] | None, bool]:
 @router.get(
     "",
     summary="文档列表",
-    description="分页列出当前用户可见文档（含 audience_dept_ids）。需要 doc:read。",
+    description=(
+        "分页列出当前用户可见文档（含 audience_dept_ids）；"
+        "可选 title 模糊筛选。需要 doc:read。"
+    ),
 )
 # 实现：分页列出可见文档
 def list_docs(
@@ -56,9 +59,14 @@ def list_docs(
     db: Annotated[Session, Depends(get_db)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    title: Annotated[str | None, Query(max_length=256)] = None,
 ) -> dict:
     items, total = doc_service.list_docs(
-        db, operator_id=current_user.id, page=page, page_size=page_size
+        db,
+        operator_id=current_user.id,
+        page=page,
+        page_size=page_size,
+        title=title,
     )
     return success(page_data(items=items, total=total, page=page, page_size=page_size))
 
