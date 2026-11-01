@@ -25,11 +25,21 @@ export interface UserUpdateBody {
   role_ids?: string[]
 }
 
-// 实现：GET /api/v1/users 分页列表
-export function fetchUsersApi(page: number, pageSize: number) {
-  return request.get<unknown, PageResult<UserItem>>('/api/v1/users', {
-    params: { page, page_size: pageSize },
-  })
+export interface UserListQuery {
+  page: number
+  pageSize: number
+  username?: string
+}
+
+// 实现：GET /api/v1/users 分页列表（可选用户名模糊筛选）
+export function fetchUsersApi(query: UserListQuery) {
+  const params: Record<string, string | number> = {
+    page: query.page,
+    page_size: query.pageSize,
+  }
+  const username = query.username?.trim()
+  if (username) params.username = username
+  return request.get<unknown, PageResult<UserItem>>('/api/v1/users', { params })
 }
 
 // 实现：POST /api/v1/users

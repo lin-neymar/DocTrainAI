@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 用户管理：路由 user:read；写按钮拆 create/update/delete/reset_password。
- * 角色勾选依赖 role:read（拉 /roles）；无该码则创建角色空、编辑不传 role_ids。
+ * 列表支持按用户名模糊搜索；角色勾选依赖 role:read。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -41,6 +41,10 @@ const users = ref<UserItem[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+
+/** 搜索表单（点「查询」后写入 appliedUsername，避免输入时误触发） */
+const filterUsername = ref('')
+const appliedUsername = ref('')
 
 const deptOptions = ref<{ id: string; label: string }[]>([])
 const deptNameMap = ref<Record<string, string>>({})
@@ -147,11 +151,15 @@ async function loadRolesIfAllowed() {
   roles.value = data.items
 }
 
-// 实现：分页拉取用户列表
+// 实现：分页拉取用户列表（带已应用的用户名条件）
 async function loadUsers() {
   loading.value = true
   try {
-    const data = await fetchUsersApi(page.value, pageSize.value)
+    const data = await fetchUsersApi({
+      page: page.value,
+      pageSize: pageSize.value,
+      username: appliedUsername.value || undefined,
+    })
     users.value = data.items
     total.value = data.total
     page.value = data.page
@@ -159,6 +167,21 @@ async function loadUsers() {
   } finally {
     loading.value = false
   }
+}
+
+// 实现：按用户名查询并回到第 1 页
+async function onSearch() {
+  appliedUsername.value = filterUsername.value.trim()
+  page.value = 1
+  await loadUsers()
+}
+
+// 实现：清空用户名搜索
+async function onResetFilters() {
+  filterUsername.value = ''
+  appliedUsername.value = ''
+  page.value = 1
+  await loadUsers()
 }
 
 function roleLabels(roleIds: string[]) {
@@ -327,7 +350,17 @@ onMounted(async () => {
 <template>
   <div class="user-page">
     <div class="toolbar">
-      <span class="hint">列表已按数据范围过滤；安全边界在后端</span>
+      <div class="filters">
+        <ElInput
+          v-model="filterUsername"
+          clearable
+          placeholder="用户名"
+          class="filter-username"
+          @keyup.enter="onSearch"
+        />
+        <ElButton type="primary" :loading="loading" @click="onSearch">查询</ElButton>
+        <ElButton :disabled="loading" @click="onResetFilters">重置</ElButton>
+      </div>
       <div class="toolbar-right">
         <ElButton :loading="loading" @click="loadUsers">刷新</ElButton>
         <ElButton v-if="canCreate" type="primary" @click="openCreate">新增用户</ElButton>
@@ -527,15 +560,28 @@ onMounted(async () => {
   border-radius: 8px;
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 取消 Element Plus 相邻按钮默认左边距，与筛选项间距统一由 gap 控制 */
+.filters :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.filter-username {
+  width: 180px;
+}
+
 .toolbar-right {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.hint {
-  font-size: 13px;
-  color: var(--dt-text-secondary);
 }
 
 .table-panel {
