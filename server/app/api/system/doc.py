@@ -1,6 +1,6 @@
 """文档 HTTP 接口。
 
-读（列表/详情/下载）：doc:read + get_visible_doc_ids。
+读（列表/详情/下载/预览）：doc:read + get_visible_doc_ids。
 上传：doc:create；改元数据与 audience：doc:update；软删除：doc:delete。
 """
 
@@ -82,7 +82,7 @@ def get_doc(
 @router.get(
     "/{doc_id}/file",
     summary="下载原文件",
-    description="返回磁盘上的原文件；不可见时 404。需要 doc:read。",
+    description="返回原文件；不可见时 404。需要 doc:read。",
 )
 # 实现：按可见性下载原文件
 def download_doc_file(
@@ -91,6 +91,26 @@ def download_doc_file(
     db: Annotated[Session, Depends(get_db)],
 ) -> FileResponse:
     path, filename, media_type = doc_service.get_download_info(
+        db, operator_id=current_user.id, doc_id=doc_id
+    )
+    return FileResponse(path=path, filename=filename, media_type=media_type)
+
+
+@router.get(
+    "/{doc_id}/preview",
+    summary="预览文件",
+    description=(
+        "返回预览流：pdf/md 为原件；docx/xlsx/pptx 为转换后的 PDF。"
+        "不可见 404；转换失败 422（仍可下载原件）。需要 doc:read。"
+    ),
+)
+# 实现：按可见性返回预览文件
+def preview_doc_file(
+    doc_id: UUID,
+    current_user: Annotated[User, Depends(require_permission("doc:read"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    path, filename, media_type = doc_service.get_preview_info(
         db, operator_id=current_user.id, doc_id=doc_id
     )
     return FileResponse(path=path, filename=filename, media_type=media_type)

@@ -157,11 +157,14 @@ def test_reject_bad_extension_and_magic(admin_headers: dict[str, str]) -> None:
 def test_upload_docx_ok(
     admin_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """合法 OOXML docx 可上传（预览转换属 D3，本测只验收入库）。"""
+    """合法 OOXML docx 可上传；无 LibreOffice 时预览失败也不阻断入库。"""
     from app.config import settings
 
     monkeypatch.setattr(
         settings, "allowed_extensions", "pdf,md,docx,xlsx,pptx"
+    )
+    monkeypatch.setattr(
+        "app.utils.office_preview.resolve_soffice_bin", lambda: None
     )
     root_id = _root_dept_id()
     payload = _minimal_ooxml("word/document.xml")
@@ -180,8 +183,57 @@ def test_upload_docx_ok(
     assert created.status_code == 200, created.text
     body = created.json()["data"]
     assert body["extension"] == "docx"
+    assert body["preview_ready"] is False
     assert "storage_key" not in body
     assert "preview_storage_key" not in body
+
+
+def test_preview_md_and_docx_mock(
+    admin_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """md 可直接预览；docx 在 mock 转换下生成 PDF 预览。"""
+    from app.config import settings
+
+    root_id = _root_dept_id()
+    md_title = f"prev-md-{uuid.uuid4().hex[:6]}"
+    md = client.post(
+        "/api/v1/docs",
+        headers=admin_headers,
+        data={"title": md_title, "dept_id": root_id},
+        files={"file": ("a.md", _MD_BYTES, "text/markdown")},
+    )
+    assert md.status_code == 200
+    md_id = md.json()["data"]["id"]
+    prev_md = client.get(f"/api/v1/docs/{md_id}/preview", headers=admin_headers)
+    assert prev_md.status_code == 200
+    assert prev_md.content == _MD_BYTES
+
+    monkeypatch.setattr(
+        settings, "allowed_extensions", "pdf,md,docx,xlsx,pptx"
+    )
+    monkeypatch.setattr(
+        "app.services.system.doc_service.convert_office_to_pdf",
+        lambda **_kwargs: b"%PDF-1.4\n%mock-preview\n",
+    )
+    docx = client.post(
+        "/api/v1/docs",
+        headers=admin_headers,
+        data={"title": f"prev-docx-{uuid.uuid4().hex[:6]}", "dept_id": root_id},
+        files={
+            "file": (
+                "b.docx",
+                _minimal_ooxml("word/document.xml"),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert docx.status_code == 200, docx.text
+    docx_id = docx.json()["data"]["id"]
+    assert docx.json()["data"]["preview_ready"] is True
+    prev_docx = client.get(f"/api/v1/docs/{docx_id}/preview", headers=admin_headers)
+    assert prev_docx.status_code == 200
+    assert prev_docx.content.startswith(b"%PDF")
+    assert "pdf" in (prev_docx.headers.get("content-type") or "").lower()
 
 
 def test_staff_cannot_see_other_branch_doc(admin_headers: dict[str, str]) -> None:

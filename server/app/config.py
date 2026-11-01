@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     s3_secret_key: str | None = None
     s3_region: str | None = None
 
+    # D3：LibreOffice 预览转换（可执行文件路径可空=自动探测；超时秒）
+    libreoffice_path: str | None = None
+    libreoffice_timeout_seconds: int = 60
+
     @property
     # 实现：把 CORS_ORIGINS 拆成 Origin 列表
     def cors_origin_list(self) -> list[str]:
