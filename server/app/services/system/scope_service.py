@@ -90,6 +90,11 @@ def can_customize_audience(session: Session, user_id: uuid.UUID) -> bool:
     )
 
 
+# 实现：对外提供部门子树 id（含自身），供列表筛选等复用
+def get_dept_subtree_ids(session: Session, root_id: uuid.UUID) -> list[uuid.UUID]:
+    return _dept_subtree_ids(session, root_id)
+
+
 # 实现：计算用户可访问的部门 id（全公司或本部门及下级）
 def get_accessible_dept_ids(session: Session, user_id: uuid.UUID) -> list[uuid.UUID]:
     """返回当前用户管理数据范围内的部门 id 列表（SERVER_SPEC 签名，阶段 2 不改）。

@@ -20,17 +20,22 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get(
     "",
     summary="用户列表",
-    description="分页列出数据范围内的用户。需要 user:read。",
+    description="分页列出数据范围内的用户；可选 username（模糊）。需要 user:read。",
 )
-# 实现：分页列出可见范围内用户
+# 实现：分页列出可见范围内用户（可选用户名模糊搜索）
 def list_users(
     current_user: Annotated[User, Depends(require_permission("user:read"))],
     db: Annotated[Session, Depends(get_db)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    username: Annotated[str | None, Query(max_length=64)] = None,
 ) -> dict:
     items, total = user_service.list_users(
-        db, operator_id=current_user.id, page=page, page_size=page_size
+        db,
+        operator_id=current_user.id,
+        page=page,
+        page_size=page_size,
+        username=username,
     )
     return success(page_data(items=items, total=total, page=page, page_size=page_size))
 

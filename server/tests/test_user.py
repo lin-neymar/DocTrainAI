@@ -113,6 +113,35 @@ def test_cannot_delete_self(admin_headers: dict[str, str]) -> None:
     assert resp.json()["code"] == 40900
 
 
+def test_list_users_search_by_username(admin_headers: dict[str, str]) -> None:
+    """按用户名模糊筛选（仍受数据范围约束）。"""
+    root_id, staff_role_id = _root_and_staff_role()
+    name_a = f"us_a_{uuid.uuid4().hex[:6]}"
+    name_b = f"us_b_{uuid.uuid4().hex[:6]}"
+    for uname in (name_a, name_b):
+        resp = client.post(
+            "/api/v1/users",
+            headers=admin_headers,
+            json={
+                "username": uname,
+                "password": "pass1234",
+                "dept_id": root_id,
+                "role_ids": [staff_role_id],
+            },
+        )
+        assert resp.status_code == 200, resp.text
+
+    by_name = client.get(
+        "/api/v1/users",
+        headers=admin_headers,
+        params={"username": name_a, "page": 1, "page_size": 50},
+    )
+    assert by_name.status_code == 200
+    items = by_name.json()["data"]["items"]
+    assert len(items) == 1
+    assert items[0]["username"] == name_a
+
+
 def test_duplicate_username_conflict(admin_headers: dict[str, str]) -> None:
     root_id, staff_role_id = _root_and_staff_role()
     username = f"dup_f2_{uuid.uuid4().hex[:8]}"

@@ -97,27 +97,45 @@ def _replace_roles(
         session.add(UserRole(user_id=user_id, role_id=rid))
 
 
-# 实现：分页列出数据范围内的用户
+# 实现：转义 ILIKE 通配符，避免用户输入 %/_ 扩大匹配
+def _ilike_pattern(raw: str) -> str:
+    escaped = (
+        raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    )
+    return f"%{escaped}%"
+
+
+# 实现：分页列出数据范围内的用户（可选 username 模糊筛选）
 def list_users(
     session: Session,
     *,
     operator_id: uuid.UUID,
     page: int,
     page_size: int,
+    username: str | None = None,
 ) -> tuple[list[dict], int]:
     accessible = list(_accessible_set(session, operator_id))
     if not accessible:
         return [], 0
 
-    total = session.scalar(
-        select(func.count())
-        .select_from(User)
-        .where(User.is_deleted.is_(False), User.dept_id.in_(accessible))
-    ) or 0
+    conditions = [
+        User.is_deleted.is_(False),
+        User.dept_id.in_(accessible),
+    ]
+    if username is not None:
+        cleaned = username.strip()
+        if cleaned:
+            conditions.append(
+                User.username.ilike(_ilike_pattern(cleaned), escape="\\")
+            )
 
+    total = (
+        session.scalar(select(func.count()).select_from(User).where(*conditions))
+        or 0
+    )
     rows = session.scalars(
         select(User)
-        .where(User.is_deleted.is_(False), User.dept_id.in_(accessible))
+        .where(*conditions)
         .order_by(User.created_at, User.id)
         .offset(page_offset(page, page_size))
         .limit(page_size)
