@@ -17,6 +17,8 @@ export interface DocItem {
   size_bytes: number
   sha256: string
   uploaded_by: string
+  /** pdf/md 恒为 true；office 在预览 PDF 已生成时为 true */
+  preview_ready?: boolean
   created_at?: string
   updated_at?: string
 }
@@ -68,5 +70,14 @@ export function downloadDocFileApi(docId: string) {
   return request.get<unknown, BlobDownload>(`/api/v1/docs/${docId}/file`, {
     responseType: 'blob',
     timeout: 120000,
+  })
+}
+
+// 实现：GET /api/v1/docs/{id}/preview 预览流（pdf/md 原件；office 为 PDF；blob）
+export function previewDocFileApi(docId: string) {
+  return request.get<unknown, BlobDownload>(`/api/v1/docs/${docId}/preview`, {
+    responseType: 'blob',
+    // office 首次转换可能较慢
+    timeout: 180000,
   })
 }

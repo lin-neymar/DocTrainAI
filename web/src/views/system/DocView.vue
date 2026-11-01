@@ -3,11 +3,12 @@
  * 文档管理：路由 doc:read；上传 doc:create；编辑 doc:update；删除 doc:delete。
  * 可见组织：有 data:scope:all 或 dept:create 可勾选；部门官无勾选（后端固定本部门）。
  */
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules, UploadFile, UploadRawFile } from 'element-plus'
 import {
   ElButton,
   ElDialog,
+  ElDrawer,
   ElForm,
   ElFormItem,
   ElInput,
@@ -27,6 +28,7 @@ import {
   deleteDocApi,
   downloadDocFileApi,
   fetchDocsApi,
+  previewDocFileApi,
   updateDocApi,
   uploadDocApi,
   type DocItem,
@@ -99,12 +101,67 @@ const uploadRules: FormRules<typeof uploadForm> = {
   file: [
     {
       validator: (_r, _v, cb) => {
-        if (!uploadForm.file) cb(new Error('请选择 pdf 或 md 文件'))
+        if (!uploadForm.file) cb(new Error('请选择 pdf / md / docx / xlsx / pptx 文件'))
         else cb()
       },
       trigger: 'change',
     },
   ],
+}
+
+/** 预览抽屉：pdf/office→iframe；md→纯文本；关闭时 revoke blob URL */
+const previewVisible = ref(false)
+const previewLoading = ref(false)
+const previewTitle = ref('')
+const previewKind = ref<'pdf' | 'md' | null>(null)
+const previewUrl = ref<string | null>(null)
+const previewText = ref('')
+const previewHint = ref('')
+
+function revokePreviewUrl() {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = null
+  }
+}
+
+function resetPreviewState() {
+  revokePreviewUrl()
+  previewKind.value = null
+  previewText.value = ''
+  previewHint.value = ''
+  previewTitle.value = ''
+}
+
+// 实现：拉取预览 blob；md 读文本，其余按 PDF 嵌入
+async function openPreview(row: unknown) {
+  const d = asDoc(row)
+  resetPreviewState()
+  previewTitle.value = d.title
+  previewVisible.value = true
+  previewLoading.value = true
+  try {
+    const { blob } = await previewDocFileApi(d.id)
+    const ext = (d.extension || '').toLowerCase()
+    if (ext === 'md') {
+      previewText.value = await blob.text()
+      previewKind.value = 'md'
+    } else {
+      // pdf 原件，或 office 转换后的 PDF
+      previewUrl.value = URL.createObjectURL(blob)
+      previewKind.value = 'pdf'
+    }
+  } catch {
+    // 拦截器已提示（如无 LibreOffice 的 422）
+    previewHint.value = '预览不可用，请下载原件查看'
+    previewKind.value = null
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function onPreviewClosed() {
+  resetPreviewState()
 }
 
 const editRules: FormRules<typeof editForm> = {
@@ -394,6 +451,10 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+onUnmounted(() => {
+  revokePreviewUrl()
+})
 </script>
 
 <template>
@@ -440,8 +501,9 @@ onMounted(async () => {
               {{ formatDateTime(asDoc(row).created_at) }}
             </template>
           </ElTableColumn>
-          <ElTableColumn label="操作" width="220" fixed="right">
+          <ElTableColumn label="操作" width="260" fixed="right">
             <template #default="{ row }">
+              <ElButton link type="primary" @click="openPreview(row)">查看</ElButton>
               <ElButton link type="primary" @click="onDownload(row)">下载</ElButton>
               <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">编辑</ElButton>
               <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">删除</ElButton>
@@ -507,7 +569,7 @@ onMounted(async () => {
           </div>
         </ElFormItem>
         <p v-else class="field-tip">可见范围固定为您所在部门（由服务端写入）。</p>
-        <ElFormItem label="文件（pdf / md）" prop="file">
+        <ElFormItem label="文件（pdf / md / docx / xlsx / pptx）" prop="file">
           <ElUpload
             :auto-upload="false"
             :limit="1"
@@ -527,6 +589,26 @@ onMounted(async () => {
         </ElButton>
       </template>
     </ElDialog>
+
+    <ElDrawer
+      v-model="previewVisible"
+      :title="previewTitle || '文档预览'"
+      size="72%"
+      destroy-on-close
+      @closed="onPreviewClosed"
+    >
+      <div v-loading="previewLoading" class="preview-body">
+        <p v-if="previewHint" class="preview-hint">{{ previewHint }}</p>
+        <iframe
+          v-if="previewKind === 'pdf' && previewUrl"
+          class="preview-frame"
+          :src="previewUrl"
+          title="文档预览"
+        />
+        <pre v-else-if="previewKind === 'md'" class="preview-md">{{ previewText }}</pre>
+        <p v-else-if="!previewLoading" class="preview-empty">暂无预览内容</p>
+      </div>
+    </ElDrawer>
 
     <ElDialog
       v-model="editVisible"
@@ -645,5 +727,51 @@ onMounted(async () => {
   padding: 8px;
   border: 1px solid var(--dt-border);
   border-radius: 6px;
+}
+
+.preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: calc(100vh - 120px);
+  min-height: 320px;
+}
+
+.preview-hint {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--dt-text-secondary);
+}
+
+.preview-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 1px solid var(--dt-border);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.preview-md {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--dt-bg-card);
+  border: 1px solid var(--dt-border);
+  border-radius: 6px;
+}
+
+.preview-empty {
+  margin: 24px 0 0;
+  text-align: center;
+  color: var(--dt-text-secondary);
 }
 </style>
