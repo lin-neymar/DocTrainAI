@@ -23,3 +23,9 @@ class CourseDocsUpdate(BaseModel):
     """整体替换课程挂接的文档；文档须在操作者可见范围内。"""
 
     doc_ids: list[UUID] = Field(default_factory=list)
+
+
+class CourseBatchDelete(BaseModel):
+    """批量软删除：ids 去重后处理，上限 100；越管理范围整批失败。"""
+
+    ids: list[UUID] = Field(min_length=1, max_length=100)

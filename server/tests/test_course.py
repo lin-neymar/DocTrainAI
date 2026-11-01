@@ -69,6 +69,41 @@ def test_courses_require_auth() -> None:
     assert client.get("/api/v1/courses").status_code == 401
 
 
+def test_batch_delete_courses(admin_headers: dict[str, str]) -> None:
+    """批量删除课程：成功删多门；含不存在 id 时整批失败。"""
+    root_id = _root_dept_id()
+    ids: list[str] = []
+    for i in range(2):
+        created = client.post(
+            "/api/v1/courses",
+            headers=admin_headers,
+            json={"title": f"batch-course-{i}-{uuid.uuid4().hex[:6]}", "dept_id": root_id},
+        )
+        assert created.status_code == 200, created.text
+        ids.append(created.json()["data"]["id"])
+
+    ok = client.post(
+        "/api/v1/courses/batch-delete",
+        headers=admin_headers,
+        json={"ids": ids},
+    )
+    assert ok.status_code == 200
+    assert ok.json()["data"]["deleted_count"] == 2
+    for course_id in ids:
+        assert (
+            client.get(f"/api/v1/courses/{course_id}", headers=admin_headers).status_code
+            == 404
+        )
+
+    fail = client.post(
+        "/api/v1/courses/batch-delete",
+        headers=admin_headers,
+        json={"ids": [str(uuid.uuid4())]},
+    )
+    assert fail.status_code == 404
+    assert fail.json()["code"] == 40400
+
+
 def test_list_courses_filter_by_title(admin_headers: dict[str, str]) -> None:
     """列表可选 title 模糊筛选；仅匹配可见课程标题。"""
     root_id = _root_dept_id()

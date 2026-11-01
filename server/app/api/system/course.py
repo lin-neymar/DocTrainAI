@@ -15,7 +15,12 @@ from app.core.response import success
 from app.database import get_db
 from app.models.system.user import User
 from app.schemas.common import page_data
-from app.schemas.system.course import CourseCreate, CourseDocsUpdate, CourseUpdate
+from app.schemas.system.course import (
+    CourseBatchDelete,
+    CourseCreate,
+    CourseDocsUpdate,
+    CourseUpdate,
+)
 from app.services.system import course_service
 
 router = APIRouter(prefix="/courses", tags=["courses"])
@@ -138,6 +143,23 @@ def replace_course_docs(
             doc_ids=body.doc_ids,
         )
     )
+
+
+@router.post(
+    "/batch-delete",
+    summary="批量软删除课程",
+    description="需要 course:delete；任一目标越管理范围则整批不删并 404；不删已挂接文档。",
+)
+# 实现：批量软删除课程
+def batch_delete_courses(
+    body: CourseBatchDelete,
+    current_user: Annotated[User, Depends(require_permission("course:delete"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    data = course_service.soft_delete_courses(
+        db, operator_id=current_user.id, course_ids=body.ids
+    )
+    return success(data)
 
 
 @router.delete(

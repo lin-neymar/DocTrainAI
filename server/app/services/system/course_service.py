@@ -297,3 +297,18 @@ def soft_delete_course(
     course = _require_course_in_scope(session, operator_id, course_id)
     course.is_deleted = True
     session.commit()
+
+
+# 实现：批量软删除课程（先全部校验再提交；越管理范围整批不删）
+def soft_delete_courses(
+    session: Session, *, operator_id: uuid.UUID, course_ids: list[uuid.UUID]
+) -> dict:
+    unique_ids = list(dict.fromkeys(course_ids))
+    courses: list[Course] = []
+    for course_id in unique_ids:
+        courses.append(_require_course_in_scope(session, operator_id, course_id))
+
+    for course in courses:
+        course.is_deleted = True
+    session.commit()
+    return {"deleted_count": len(courses)}

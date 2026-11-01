@@ -20,7 +20,7 @@ from app.core.response import success
 from app.database import get_db
 from app.models.system.user import User
 from app.schemas.common import page_data
-from app.schemas.system.doc import DocUpdate
+from app.schemas.system.doc import DocBatchDelete, DocUpdate
 from app.services.system import doc_service
 
 router = APIRouter(prefix="/docs", tags=["docs"])
@@ -179,6 +179,23 @@ def update_doc(
             audience_provided="audience_dept_ids" in body.model_fields_set,
         )
     )
+
+
+@router.post(
+    "/batch-delete",
+    summary="批量软删除文档",
+    description="需要 doc:delete；任一目标越管理范围则整批不删并 404；不删磁盘文件。",
+)
+# 实现：批量软删除文档
+def batch_delete_docs(
+    body: DocBatchDelete,
+    current_user: Annotated[User, Depends(require_permission("doc:delete"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    data = doc_service.soft_delete_docs(
+        db, operator_id=current_user.id, doc_ids=body.ids
+    )
+    return success(data)
 
 
 @router.delete(

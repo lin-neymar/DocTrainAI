@@ -16,3 +16,9 @@ class DocUpdate(BaseModel):
     dept_id: UUID | None = None
     # 未出现在请求体 → 不改 audience（部门官仍由服务端 B3 强制）
     audience_dept_ids: list[UUID] | None = None
+
+
+class DocBatchDelete(BaseModel):
+    """批量软删除：ids 去重后处理，上限 100；越管理范围整批失败。"""
+
+    ids: list[UUID] = Field(min_length=1, max_length=100)

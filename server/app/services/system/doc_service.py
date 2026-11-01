@@ -305,6 +305,21 @@ def soft_delete_doc(
     session.commit()
 
 
+# 实现：批量软删除文档（先全部校验再提交；越管理范围整批不删）
+def soft_delete_docs(
+    session: Session, *, operator_id: uuid.UUID, doc_ids: list[uuid.UUID]
+) -> dict:
+    unique_ids = list(dict.fromkeys(doc_ids))
+    docs: list[Doc] = []
+    for doc_id in unique_ids:
+        docs.append(_require_doc_in_dept_scope(session, operator_id, doc_id))
+
+    for doc in docs:
+        doc.is_deleted = True
+    session.commit()
+    return {"deleted_count": len(docs)}
+
+
 # 实现：解析可下载的绝对路径与原始文件名；不可见 → 404
 def get_download_info(
     session: Session, *, operator_id: uuid.UUID, doc_id: uuid.UUID
