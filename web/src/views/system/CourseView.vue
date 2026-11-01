@@ -37,6 +37,7 @@ import {
   canCustomizeAudience,
   collectSubtreeIds,
 } from '@/utils/audience'
+import { formatDateTime } from '@/utils/datetime'
 import { hasPermission } from '@/utils/permission'
 
 type TreeExpose = {
@@ -399,7 +400,11 @@ onMounted(async () => {
               <span v-else class="muted">未挂接</span>
             </template>
           </ElTableColumn>
-          <ElTableColumn prop="updated_at" label="更新时间" min-width="170" />
+          <ElTableColumn label="更新时间" min-width="170">
+            <template #default="{ row }">
+              {{ formatDateTime(asCourse(row).updated_at) }}
+            </template>
+          </ElTableColumn>
           <ElTableColumn v-if="canAnyWrite" label="操作" width="220" fixed="right">
             <template #default="{ row }">
               <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">

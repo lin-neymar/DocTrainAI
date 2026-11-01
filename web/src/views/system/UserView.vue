@@ -32,6 +32,7 @@ import {
   type UserItem,
 } from '@/api/system/user'
 import { useUserStore } from '@/stores/user'
+import { formatDateTime } from '@/utils/datetime'
 import { hasPermission } from '@/utils/permission'
 
 const userStore = useUserStore()
@@ -398,7 +399,11 @@ onMounted(async () => {
               <span v-else class="muted">未分配</span>
             </template>
           </ElTableColumn>
-          <ElTableColumn prop="created_at" label="创建时间" min-width="170" />
+          <ElTableColumn label="创建时间" min-width="170">
+            <template #default="{ row }">
+              {{ formatDateTime(asUser(row).created_at) }}
+            </template>
+          </ElTableColumn>
           <ElTableColumn
             v-if="canUpdate || canResetPassword || canDelete"
             label="操作"

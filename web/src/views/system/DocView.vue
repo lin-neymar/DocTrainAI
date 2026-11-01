@@ -36,6 +36,7 @@ import {
   canCustomizeAudience,
   collectSubtreeIds,
 } from '@/utils/audience'
+import { formatDateTime } from '@/utils/datetime'
 import { hasPermission } from '@/utils/permission'
 
 type TreeExpose = {
@@ -433,7 +434,11 @@ onMounted(async () => {
               {{ formatSize(asDoc(row).size_bytes) }}
             </template>
           </ElTableColumn>
-          <ElTableColumn prop="created_at" label="上传时间" min-width="170" />
+          <ElTableColumn label="上传时间" min-width="170">
+            <template #default="{ row }">
+              {{ formatDateTime(asDoc(row).created_at) }}
+            </template>
+          </ElTableColumn>
           <ElTableColumn label="操作" width="220" fixed="right">
             <template #default="{ row }">
               <ElButton link type="primary" @click="onDownload(row)">下载</ElButton>
