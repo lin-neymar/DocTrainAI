@@ -4,7 +4,13 @@
  * 可见组织：有 data:scope:all 或 dept:create 可勾选；部门官无勾选（后端固定本部门）。
  */
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import type { FormInstance, FormRules, UploadFile, UploadRawFile } from 'element-plus'
+import type {
+  FormInstance,
+  FormRules,
+  TableInstance,
+  UploadFile,
+  UploadRawFile,
+} from 'element-plus'
 import {
   ElButton,
   ElDialog,
@@ -23,6 +29,7 @@ import {
 
 import { fetchDeptTreeApi, type DeptTreeNode } from '@/api/system/dept'
 import {
+  batchDeleteDocsApi,
   deleteDocApi,
   downloadDocFileApi,
   fetchDocsApi,
@@ -41,10 +48,13 @@ type TreeExpose = {
 }
 
 const loading = ref(false)
+const batchDeleting = ref(false)
 const docs = ref<DocItem[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const tableRef = ref<TableInstance>()
+const selectedDocs = ref<DocItem[]>([])
 const filterTitle = ref('')
 const appliedTitle = ref('')
 
@@ -206,9 +216,15 @@ async function loadDocs() {
     total.value = data.total
     page.value = data.page
     pageSize.value = data.page_size
+    selectedDocs.value = []
+    tableRef.value?.clearSelection()
   } finally {
     loading.value = false
   }
+}
+
+function onSelectionChange(rows: DocItem[]) {
+  selectedDocs.value = rows
 }
 
 // 实现：按标题查询并回到第 1 页
@@ -437,6 +453,47 @@ async function onDelete(row: unknown) {
   }
 }
 
+// 实现：批量软删除当前页勾选文档
+async function onBatchDelete() {
+  if (!canDelete.value || batchDeleting.value) return
+  const targets = selectedDocs.value
+  if (!targets.length) {
+    ElMessage.warning('请先勾选要删除的文档')
+    return
+  }
+  const preview = targets
+    .slice(0, 3)
+    .map((d) => d.title)
+    .join('、')
+  const more = targets.length > 3 ? ` 等 ${targets.length} 篇` : ''
+  try {
+    await ElMessageBox.confirm(
+      `确定删除所选文档「${preview}${more}」？共 ${targets.length} 篇。`,
+      '批量删除',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+      },
+    )
+  } catch {
+    return
+  }
+  batchDeleting.value = true
+  try {
+    const result = await batchDeleteDocsApi(targets.map((d) => d.id))
+    ElMessage.success(`已删除 ${result.deleted_count} 篇`)
+    if (targets.length >= docs.value.length && page.value > 1) {
+      page.value -= 1
+    }
+    await loadDocs()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
 async function onPageChange(p: number) {
   page.value = p
   await loadDocs()
@@ -482,6 +539,16 @@ onUnmounted(() => {
         <span class="hint">仅展示当前可见文档</span>
       </div>
       <div class="toolbar-right">
+        <ElButton
+          v-if="canDelete"
+          type="danger"
+          plain
+          :disabled="!selectedDocs.length || batchDeleting"
+          :loading="batchDeleting"
+          @click="onBatchDelete"
+        >
+          批量删除{{ selectedDocs.length ? ` (${selectedDocs.length})` : '' }}
+        </ElButton>
         <ElButton :loading="loading" @click="loadDocs">刷新</ElButton>
         <ElButton v-if="canCreate" type="primary" @click="openUpload">上传文档</ElButton>
       </div>
@@ -489,7 +556,16 @@ onUnmounted(() => {
 
     <div class="table-panel">
       <div class="table-scroll">
-        <ElTable v-loading="loading" height="100%" :data="docs" stripe empty-text="暂无文档">
+        <ElTable
+          ref="tableRef"
+          v-loading="loading"
+          height="100%"
+          :data="docs"
+          stripe
+          empty-text="暂无文档"
+          @selection-change="onSelectionChange"
+        >
+          <ElTableColumn v-if="canDelete" type="selection" width="48" />
           <ElTableColumn prop="title" label="标题" min-width="160" />
           <ElTableColumn label="归属" min-width="110">
             <template #default="{ row }">

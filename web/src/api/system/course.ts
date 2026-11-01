@@ -70,3 +70,15 @@ export function replaceCourseDocsApi(courseId: string, docIds: string[]) {
 export function deleteCourseApi(courseId: string) {
   return request.delete<unknown, unknown>(`/api/v1/courses/${courseId}`)
 }
+
+export interface CourseBatchDeleteResult {
+  deleted_count: number
+}
+
+// 实现：POST /api/v1/courses/batch-delete
+export function batchDeleteCoursesApi(ids: string[]) {
+  return request.post<unknown, CourseBatchDeleteResult>(
+    '/api/v1/courses/batch-delete',
+    { ids },
+  )
+}

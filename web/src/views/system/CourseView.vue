@@ -4,7 +4,7 @@
  * 可见组织勾选规则与文档一致；挂接文档选项来自可见文档列表。
  */
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import {
   ElButton,
   ElDialog,
@@ -24,6 +24,7 @@ import {
 } from 'element-plus'
 
 import {
+  batchDeleteCoursesApi,
   createCourseApi,
   deleteCourseApi,
   fetchCoursesApi,
@@ -47,10 +48,13 @@ type TreeExpose = {
 }
 
 const loading = ref(false)
+const batchDeleting = ref(false)
 const courses = ref<CourseItem[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const tableRef = ref<TableInstance>()
+const selectedCourses = ref<CourseItem[]>([])
 const filterTitle = ref('')
 const appliedTitle = ref('')
 
@@ -162,9 +166,15 @@ async function loadCourses() {
     total.value = data.total
     page.value = data.page
     pageSize.value = data.page_size
+    selectedCourses.value = []
+    tableRef.value?.clearSelection()
   } finally {
     loading.value = false
   }
+}
+
+function onSelectionChange(rows: CourseItem[]) {
+  selectedCourses.value = rows
 }
 
 // 实现：按标题查询并回到第 1 页
@@ -352,6 +362,47 @@ async function onDelete(row: unknown) {
   }
 }
 
+// 实现：批量软删除当前页勾选课程
+async function onBatchDelete() {
+  if (!canDelete.value || batchDeleting.value) return
+  const targets = selectedCourses.value
+  if (!targets.length) {
+    ElMessage.warning('请先勾选要删除的课程')
+    return
+  }
+  const preview = targets
+    .slice(0, 3)
+    .map((c) => c.title)
+    .join('、')
+  const more = targets.length > 3 ? ` 等 ${targets.length} 门` : ''
+  try {
+    await ElMessageBox.confirm(
+      `确定删除所选课程「${preview}${more}」？共 ${targets.length} 门；已挂接文档不会被删除。`,
+      '批量删除',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+      },
+    )
+  } catch {
+    return
+  }
+  batchDeleting.value = true
+  try {
+    const result = await batchDeleteCoursesApi(targets.map((c) => c.id))
+    ElMessage.success(`已删除 ${result.deleted_count} 门`)
+    if (targets.length >= courses.value.length && page.value > 1) {
+      page.value -= 1
+    }
+    await loadCourses()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
 async function onPageChange(p: number) {
   page.value = p
   await loadCourses()
@@ -393,6 +444,16 @@ onMounted(async () => {
         <span class="hint">挂接文档不放大文档权限</span>
       </div>
       <div class="toolbar-right">
+        <ElButton
+          v-if="canDelete"
+          type="danger"
+          plain
+          :disabled="!selectedCourses.length || batchDeleting"
+          :loading="batchDeleting"
+          @click="onBatchDelete"
+        >
+          批量删除{{ selectedCourses.length ? ` (${selectedCourses.length})` : '' }}
+        </ElButton>
         <ElButton :loading="loading" @click="loadCourses">刷新</ElButton>
         <ElButton v-if="canCreate" type="primary" @click="openCreate">新增课程</ElButton>
       </div>
@@ -401,12 +462,15 @@ onMounted(async () => {
     <div class="table-panel">
       <div class="table-scroll">
         <ElTable
+          ref="tableRef"
           v-loading="loading"
           height="100%"
           :data="courses"
           stripe
           empty-text="暂无课程"
+          @selection-change="onSelectionChange"
         >
+          <ElTableColumn v-if="canDelete" type="selection" width="48" />
           <ElTableColumn prop="title" label="标题" min-width="160" />
           <ElTableColumn label="归属" min-width="110">
             <template #default="{ row }">

@@ -55,7 +55,7 @@ src/
 12. **文档预览**：文档列表提供「查看」。调用预览接口（鉴权代下 blob）；pdf 用页内嵌入预览；md 用文本展示（阶段 1 不强制引入 markdown 渲染库）；office 预览流为 PDF，同样嵌入。关闭预览须释放对象 URL。阶段 1 不展示解析状态。
 
 ## 阶段页面
-阶段 1：登录、工作台、部门树、用户、角色权限、文档上传与列表（含归属与可见组织、标题搜索、批量删除、查看预览；部门管理员无可见勾选；允许 pdf/md/docx/xlsx/pptx）、课程及挂接文档、系统设置（已登录可进：T1 人人可改；T2～T4 按码显隐）。文档列表不展示解析状态。
+阶段 1：登录、工作台、部门树、用户、角色权限、文档上传与列表（含归属与可见组织、标题搜索、批量删除、查看预览；部门管理员无可见勾选；允许 pdf/md/docx/xlsx/pptx）、课程及挂接文档（含标题搜索、批量删除）、系统设置（已登录可进：T1 人人可改；T2～T4 按码显隐）。文档列表不展示解析状态。
 
 阶段 2：在现有文档列表增加解析状态。不新增知识库页面。
 
@@ -86,7 +86,7 @@ SSE 的读取放在 `utils/sse.ts`。组件只消费已经解析好的 `delta`�
 | 用户管理 | `user:read`；写按钮对应 `user:create` 等；重置密码 `user:reset_password`；角色勾选依赖 `role:read`；有 `user:delete` 时表格多选 + 批量删除（当前页） |
 | 角色管理 | `role:assign_perm`（仅配置权限与角色维护入口）；无此码不进菜单。`role:read` 供其他页拉列表 |
 | 文档管理 | `doc:read`；上传 `doc:create`；编辑 `doc:update`；删除 `doc:delete`；查看预览（`doc:read`）；标题搜索；有 `doc:delete` 时多选批量删 |
-| 课程管理 | `course:read`；创建/编辑 `course:create`/`course:update`；删除 `course:delete`；挂接 `course:attach_doc`；标题搜索 |
+| 课程管理 | `course:read`；创建/编辑 `course:create`/`course:update`；删除 `course:delete`；挂接 `course:attach_doc`；标题搜索；有 `course:delete` 时多选批量删 |
 | 系统设置 | 已登录即可（无 `meta.permission`）；页内品牌区 `system:read` / `system:update` |
 | 个人主题 T1 | 无独立路由权限；设置页内已登录可改 |
 

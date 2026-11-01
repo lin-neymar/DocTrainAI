@@ -76,6 +76,17 @@ export function deleteDocApi(docId: string) {
   return request.delete<unknown, unknown>(`/api/v1/docs/${docId}`)
 }
 
+export interface DocBatchDeleteResult {
+  deleted_count: number
+}
+
+// 实现：POST /api/v1/docs/batch-delete
+export function batchDeleteDocsApi(ids: string[]) {
+  return request.post<unknown, DocBatchDeleteResult>('/api/v1/docs/batch-delete', {
+    ids,
+  })
+}
+
 // 实现：GET /api/v1/docs/{id}/file 下载原文件（blob）
 export function downloadDocFileApi(docId: string) {
   return request.get<unknown, BlobDownload>(`/api/v1/docs/${docId}/file`, {
