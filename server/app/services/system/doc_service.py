@@ -17,6 +17,7 @@ from app.core.exceptions import NotFoundError, ValidationFailedError
 from app.models.system.dept import Dept
 from app.models.system.doc import Doc, DocAudienceDept
 from app.services.system import scope_service
+from app.storage import get_storage
 from app.utils import files as file_utils
 from app.utils.pagination import page_offset
 
@@ -181,9 +182,8 @@ def create_doc(
     try:
         session.commit()
     except Exception:
-        # DB 失败时尽量清掉刚写入的文件，避免孤儿文件堆积
-        path = file_utils.resolve_stored_path(storage_key)
-        path.unlink(missing_ok=True)
+        # DB 失败时尽量清掉刚写入的对象，避免孤儿文件堆积
+        file_utils.delete_stored(storage_key)
         raise
     session.refresh(doc)
     return _to_dict(session, doc)
@@ -246,8 +246,8 @@ def get_download_info(
     session: Session, *, operator_id: uuid.UUID, doc_id: uuid.UUID
 ) -> tuple[Path, str, str]:
     doc = _require_visible_doc(session, operator_id, doc_id)
-    path = file_utils.resolve_stored_path(doc.storage_key)
-    if not path.is_file():
+    if not get_storage().exists(doc.storage_key):
         raise NotFoundError("文件不存在")
+    path = file_utils.resolve_stored_path(doc.storage_key)
     media = "application/pdf" if doc.extension == "pdf" else "text/markdown; charset=utf-8"
     return path, doc.original_filename, media

@@ -35,12 +35,20 @@ class Settings(BaseSettings):
     # D-C：允许跨域访问 API 的前端 Origin，英文逗号分隔（Vite 默认 http://localhost:5173）
     cors_origins: str = "http://localhost:5173"
 
-    # F0：文档原文件存储与上传限制（SERVER_SPEC 默认 pdf/md、20MB）
-    # 相对路径相对于 server/；也可写成绝对路径
+    # F0：文档原文件存储与上传限制（相对路径相对于 server/）
     file_storage_dir: str = "storage"
     file_max_mb: int = 20
-    # 英文逗号分隔，不含点号，如 pdf,md
+    # 英文逗号分隔，不含点号；默认 pdf,md（D2 再扩 office）
     allowed_extensions: str = "pdf,md"
+
+    # 存储后端：阶段 1 仅 local；s3 等取值阶段 1 禁止实现客户端
+    storage_backend: str = "local"
+    # 以下 S3_* 仅预留配置位，阶段 1 不读取实现（extra=ignore 亦可用注释写在 .env.example）
+    s3_endpoint: str | None = None
+    s3_bucket: str | None = None
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
+    s3_region: str | None = None
 
     @property
     # 实现：把 CORS_ORIGINS 拆成 Origin 列表

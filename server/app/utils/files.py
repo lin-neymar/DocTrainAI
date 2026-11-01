@@ -1,4 +1,4 @@
-"""上传文件校验与落盘（相对 FILE_STORAGE_DIR 的 storage_key）。
+"""上传文件校验与经 StorageBackend 落盘（storage_key）。
 
 阶段 1：只校验扩展名 + 文件头 + 大小；不解析正文。
 """
@@ -12,6 +12,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.core.exceptions import ValidationFailedError
+from app.storage import get_storage, require_local_path
 
 # PDF 魔数；md 无标准魔数，用「非 PDF + 非明显二进制」近似
 _PDF_MAGIC = b"%PDF"
@@ -61,30 +62,22 @@ def build_storage_key(ext: str) -> str:
     return f"{now:%Y}/{now:%m}/{uuid.uuid4().hex}.{ext}"
 
 
-# 实现：写入磁盘并返回 (storage_key, size_bytes, sha256)；失败时尽量清理半成品
+# 实现：校验后经存储后端写入，返回 (storage_key, size_bytes, sha256)
 def save_upload_bytes(*, content: bytes, ext: str) -> tuple[str, int, str]:
     assert_size_ok(len(content))
     assert_magic_matches(ext, content[:1024])
 
     storage_key = build_storage_key(ext)
-    dest = settings.file_storage_path / storage_key
-    dest.parent.mkdir(parents=True, exist_ok=True)
-
     sha = hashlib.sha256(content).hexdigest()
-    try:
-        dest.write_bytes(content)
-    except OSError as exc:
-        if dest.exists():
-            dest.unlink(missing_ok=True)
-        raise ValidationFailedError("文件保存失败") from exc
-
+    get_storage().put(storage_key, content)
     return storage_key, len(content), sha
 
 
-# 实现：把 storage_key 解析为绝对路径（禁止跳出存储根目录）
+# 实现：阶段 1 解析本地绝对路径（FileResponse / 兼容旧调用）
 def resolve_stored_path(storage_key: str) -> Path:
-    root = settings.file_storage_path.resolve()
-    path = (root / storage_key).resolve()
-    if not str(path).startswith(str(root)):
-        raise ValidationFailedError("非法存储路径")
-    return path
+    return require_local_path(storage_key)
+
+
+# 实现：删除存储对象（DB 失败回滚时清理半成品等）
+def delete_stored(storage_key: str) -> None:
+    get_storage().delete(storage_key)

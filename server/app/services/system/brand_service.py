@@ -9,10 +9,10 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.core.exceptions import NotFoundError, ValidationFailedError
 from app.models.system.system_brand import SystemBrand
 from app.services.system import auth_service
+from app.storage import get_storage
 from app.utils.files import resolve_stored_path
 
 # 与 seed_data 默认文案保持一致；业务不 import scripts
@@ -84,24 +84,14 @@ def upload_logo(session: Session, *, filename: str | None, content: bytes) -> di
     brand = get_or_create_brand(session)
     old_key = brand.logo_storage_key
     storage_key = f"brand/{uuid.uuid4().hex}.{ext}"
-    dest = settings.file_storage_path / storage_key
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        dest.write_bytes(content)
-    except OSError as exc:
-        dest.unlink(missing_ok=True)
-        raise ValidationFailedError("Logo 保存失败") from exc
+    get_storage().put(storage_key, content)
 
     brand.logo_storage_key = storage_key
     session.commit()
     session.refresh(brand)
 
     if old_key and old_key != storage_key:
-        try:
-            old_path = resolve_stored_path(old_key)
-            old_path.unlink(missing_ok=True)
-        except Exception:
-            pass
+        get_storage().delete(old_key)
 
     return brand_to_dict(brand)
 
@@ -111,9 +101,9 @@ def get_logo_path(session: Session) -> tuple[Path, str]:
     brand = get_or_create_brand(session)
     if not brand.logo_storage_key:
         raise NotFoundError("logo not found")
-    path = resolve_stored_path(brand.logo_storage_key)
-    if not path.is_file():
+    if not get_storage().exists(brand.logo_storage_key):
         raise NotFoundError("logo not found")
+    path = resolve_stored_path(brand.logo_storage_key)
     media = {
         ".png": "image/png",
         ".jpg": "image/jpeg",
