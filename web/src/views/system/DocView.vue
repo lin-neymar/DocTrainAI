@@ -245,8 +245,9 @@ function onFileChange(uploadFile: UploadFile) {
   const raw = uploadFile.raw as UploadRawFile | undefined
   if (!raw) return
   const name = raw.name.toLowerCase()
-  if (!name.endsWith('.pdf') && !name.endsWith('.md')) {
-    ElMessage.warning('仅支持 pdf、md')
+  const okExt = /\.(pdf|md|docx|xlsx|pptx)$/i.test(name)
+  if (!okExt) {
+    ElMessage.warning('仅支持 pdf、md、docx、xlsx、pptx')
     fileList.value = []
     uploadForm.file = null
     return
@@ -254,7 +255,7 @@ function onFileChange(uploadFile: UploadFile) {
   uploadForm.file = raw
   fileList.value = [uploadFile]
   if (!uploadForm.title.trim()) {
-    uploadForm.title = raw.name.replace(/\.(pdf|md)$/i, '')
+    uploadForm.title = raw.name.replace(/\.(pdf|md|docx|xlsx|pptx)$/i, '')
   }
 }
 
@@ -511,7 +512,7 @@ onMounted(async () => {
             :auto-upload="false"
             :limit="1"
             :file-list="fileList"
-            accept=".pdf,.md,application/pdf,text/markdown"
+            accept=".pdf,.md,.docx,.xlsx,.pptx,application/pdf,text/markdown"
             @change="onFileChange"
             @remove="onFileRemove"
           >
