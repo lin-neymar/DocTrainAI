@@ -2,6 +2,7 @@
 /**
  * 用户管理：路由 user:read；写按钮拆 create/update/delete/reset_password。
  * 列表支持按用户名模糊搜索；有 user:delete 时多选 + 批量删除（当前页）。
+ * 所属部门用 TreeSelect 展示组织层级；角色仍为多选（规约：用户可多角色）。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
@@ -19,6 +20,7 @@ import {
   ElTable,
   ElTableColumn,
   ElTag,
+  ElTreeSelect,
 } from 'element-plus'
 
 import { fetchDeptTreeApi, type DeptTreeNode } from '@/api/system/dept'
@@ -51,8 +53,13 @@ const selectedUsers = ref<UserItem[]>([])
 const filterUsername = ref('')
 const appliedUsername = ref('')
 
-const deptOptions = ref<{ id: string; label: string }[]>([])
+const deptTree = ref<DeptTreeNode[]>([])
 const deptNameMap = ref<Record<string, string>>({})
+const deptTreeSelectProps = {
+  value: 'id',
+  label: 'name',
+  children: 'children',
+} as const
 const roles = ref<RoleItem[]>([])
 const roleNameMap = computed(() => {
   const map: Record<string, string> = {}
@@ -122,28 +129,29 @@ const dialogTitle = computed(() =>
   dialogMode.value === 'create' ? '新增用户' : '编辑用户',
 )
 
-// 实现：部门树展平为下拉选项（缩进表示层级）
-function flattenDepts(nodes: DeptTreeNode[], depth = 0) {
-  const opts: { id: string; label: string }[] = []
+// 实现：遍历部门树，收集 id→名称（列表展示用）
+function collectDeptNames(nodes: DeptTreeNode[]): Record<string, string> {
   const names: Record<string, string> = {}
-  const walk = (list: DeptTreeNode[], d: number) => {
+  const walk = (list: DeptTreeNode[]) => {
     for (const n of list) {
-      const prefix = d > 0 ? `${'—'.repeat(d)} ` : ''
-      opts.push({ id: n.id, label: `${prefix}${n.name}` })
       names[n.id] = n.name
-      walk(n.children, d + 1)
+      if (n.children?.length) walk(n.children)
     }
   }
-  walk(nodes, depth)
-  return { opts, names }
+  walk(nodes)
+  return names
 }
 
-// 实现：加载可见部门树（供表单选部门、列表显示名）
+// 实现：取树中第一个节点 id（新建用户默认部门）
+function firstDeptId(nodes: DeptTreeNode[]): string {
+  return nodes[0]?.id ?? ''
+}
+
+// 实现：加载可见部门树（表单用 TreeSelect，列表用名称映射）
 async function loadDepts() {
   const tree = await fetchDeptTreeApi()
-  const { opts, names } = flattenDepts(tree)
-  deptOptions.value = opts
-  deptNameMap.value = names
+  deptTree.value = tree
+  deptNameMap.value = collectDeptNames(tree)
 }
 
 // 实现：有 role:read 时拉取角色供多选；否则跳过
@@ -210,7 +218,7 @@ function openCreate() {
   editingId.value = null
   form.username = ''
   form.password = ''
-  form.dept_id = deptOptions.value[0]?.id ?? ''
+  form.dept_id = firstDeptId(deptTree.value)
   form.role_ids = []
   dialogVisible.value = true
 }
@@ -548,22 +556,22 @@ onMounted(async () => {
           />
         </ElFormItem>
         <ElFormItem label="所属部门" prop="dept_id">
-          <ElSelect v-model="form.dept_id" filterable style="width: 100%">
-            <ElOption
-              v-for="opt in deptOptions"
-              :key="opt.id"
-              :label="opt.label"
-              :value="opt.id"
-            />
-          </ElSelect>
+          <ElTreeSelect
+            v-model="form.dept_id"
+            :data="deptTree"
+            :props="deptTreeSelectProps"
+            check-strictly
+            filterable
+            default-expand-all
+            placeholder="请选择部门"
+            style="width: 100%"
+          />
         </ElFormItem>
         <ElFormItem v-if="canAssignRoles" label="角色">
           <ElSelect
             v-model="form.role_ids"
             multiple
             filterable
-            collapse-tags
-            collapse-tags-tooltip
             placeholder="可多选"
             style="width: 100%"
           >
