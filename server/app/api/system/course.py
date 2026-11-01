@@ -24,7 +24,10 @@ router = APIRouter(prefix="/courses", tags=["courses"])
 @router.get(
     "",
     summary="课程列表",
-    description="分页列出当前用户阅读可见的课程（含 audience_dept_ids）。需要 course:read。",
+    description=(
+        "分页列出当前用户阅读可见的课程（含 audience_dept_ids）；"
+        "可选 title 模糊筛选。需要 course:read。"
+    ),
 )
 # 实现：分页列出可见范围内课程
 def list_courses(
@@ -32,9 +35,14 @@ def list_courses(
     db: Annotated[Session, Depends(get_db)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    title: Annotated[str | None, Query(max_length=256)] = None,
 ) -> dict:
     items, total = course_service.list_courses(
-        db, operator_id=current_user.id, page=page, page_size=page_size
+        db,
+        operator_id=current_user.id,
+        page=page,
+        page_size=page_size,
+        title=title,
     )
     return success(page_data(items=items, total=total, page=page, page_size=page_size))
 

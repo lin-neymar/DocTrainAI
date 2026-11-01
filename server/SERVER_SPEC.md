@@ -129,7 +129,7 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 - 文档：读/下载/预览需 `doc:read` + `get_visible_doc_ids`；列表可选 `title` 模糊筛选；上传 `doc:create`；改元数据与 audience `doc:update`；软删 `doc:delete`；`POST /docs/batch-delete`（body: `ids`，最多 100）需 `doc:delete`，越管理范围整批失败。写路径归属部门受管理范围约束。
   - `GET /docs/{id}/file`：原件下载。
   - `GET /docs/{id}/preview`：预览流（见「上传与预览」）。
-- 课程：读需 `course:read` + 课程 audience 规则；写拆细码；`PUT /courses/{id}/docs` 需 `course:attach_doc`，文档须对操作者可见。
+- 课程：读需 `course:read` + 课程 audience 规则；列表可选 `title` 模糊筛选；写拆细码；`PUT /courses/{id}/docs` 需 `course:attach_doc`，文档须对操作者可见。
 - 系统品牌：
   - `GET /system/brand`（或等价路径）：**公开只读**，返回显示名、副文案、Logo 访问信息，供登录页。不鉴权。
   - `GET /system/settings`：需 `system:read`，设置页用。

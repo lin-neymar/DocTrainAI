@@ -138,27 +138,44 @@ def _replace_docs(
         session.add(CourseDoc(course_id=course_id, doc_id=did))
 
 
-# 实现：分页列出当前用户阅读可见的未删课程
+# 实现：转义 ILIKE 通配符，避免用户输入 %/_ 扩大匹配
+def _ilike_pattern(raw: str) -> str:
+    escaped = (
+        raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    )
+    return f"%{escaped}%"
+
+
+# 实现：分页列出当前用户阅读可见的未删课程（可选 title 模糊筛选）
 def list_courses(
     session: Session,
     *,
     operator_id: uuid.UUID,
     page: int,
     page_size: int,
+    title: str | None = None,
 ) -> tuple[list[dict], int]:
     visible = list(_visible_set(session, operator_id))
     if not visible:
         return [], 0
 
+    conditions = [Course.id.in_(visible), Course.is_deleted.is_(False)]
+    if title is not None:
+        cleaned = title.strip()
+        if cleaned:
+            conditions.append(
+                Course.title.ilike(_ilike_pattern(cleaned), escape="\\")
+            )
+
     total = (
         session.scalar(
-            select(func.count()).select_from(Course).where(Course.id.in_(visible))
+            select(func.count()).select_from(Course).where(*conditions)
         )
         or 0
     )
     rows = session.scalars(
         select(Course)
-        .where(Course.id.in_(visible))
+        .where(*conditions)
         .order_by(Course.created_at.desc(), Course.id)
         .offset(page_offset(page, page_size))
         .limit(page_size)

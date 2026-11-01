@@ -69,6 +69,32 @@ def test_courses_require_auth() -> None:
     assert client.get("/api/v1/courses").status_code == 401
 
 
+def test_list_courses_filter_by_title(admin_headers: dict[str, str]) -> None:
+    """列表可选 title 模糊筛选；仅匹配可见课程标题。"""
+    root_id = _root_dept_id()
+    marker = uuid.uuid4().hex[:8]
+    title_hit = f"课程命中-{marker}"
+    title_miss = f"其它课程-{marker}"
+
+    for title in (title_hit, title_miss):
+        created = client.post(
+            "/api/v1/courses",
+            headers=admin_headers,
+            json={"title": title, "dept_id": root_id},
+        )
+        assert created.status_code == 200, created.text
+
+    listed = client.get(
+        "/api/v1/courses",
+        headers=admin_headers,
+        params={"page": 1, "page_size": 100, "title": f"命中-{marker}"},
+    )
+    assert listed.status_code == 200
+    titles = {item["title"] for item in listed.json()["data"]["items"]}
+    assert title_hit in titles
+    assert title_miss not in titles
+
+
 def test_create_list_attach_docs_update_delete(admin_headers: dict[str, str]) -> None:
     root_id = _root_dept_id()
     title = f"入职课-{uuid.uuid4().hex[:8]}"
