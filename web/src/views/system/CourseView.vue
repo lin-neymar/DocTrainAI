@@ -359,54 +359,62 @@ onMounted(async () => {
     </div>
 
     <div class="table-panel">
-      <ElTable v-loading="loading" :data="courses" stripe empty-text="暂无课程">
-        <ElTableColumn prop="title" label="标题" min-width="160" />
-        <ElTableColumn label="归属" min-width="110">
-          <template #default="{ row }">
-            {{ deptLabel(row) }}
-          </template>
-        </ElTableColumn>
-        <ElTableColumn label="可见组织" min-width="140" show-overflow-tooltip>
-          <template #default="{ row }">
-            {{ audienceLabel(row) }}
-          </template>
-        </ElTableColumn>
-        <ElTableColumn label="简介" min-width="140" show-overflow-tooltip>
-          <template #default="{ row }">
-            {{ asCourse(row).description || '—' }}
-          </template>
-        </ElTableColumn>
-        <ElTableColumn label="挂接文档" min-width="200">
-          <template #default="{ row }">
-            <template v-if="docLabels(row).length">
-              <ElTag
-                v-for="name in docLabels(row)"
-                :key="name"
-                class="doc-tag"
-                size="small"
-                effect="plain"
-              >
-                {{ name }}
-              </ElTag>
+      <div class="table-scroll">
+        <ElTable
+          v-loading="loading"
+          height="100%"
+          :data="courses"
+          stripe
+          empty-text="暂无课程"
+        >
+          <ElTableColumn prop="title" label="标题" min-width="160" />
+          <ElTableColumn label="归属" min-width="110">
+            <template #default="{ row }">
+              {{ deptLabel(row) }}
             </template>
-            <span v-else class="muted">未挂接</span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="updated_at" label="更新时间" min-width="170" />
-        <ElTableColumn v-if="canAnyWrite" label="操作" width="220" fixed="right">
-          <template #default="{ row }">
-            <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">
-              编辑
-            </ElButton>
-            <ElButton v-if="canAttach" link type="primary" @click="openAttachDocs(row)">
-              挂接文档
-            </ElButton>
-            <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">
-              删除
-            </ElButton>
-          </template>
-        </ElTableColumn>
-      </ElTable>
+          </ElTableColumn>
+          <ElTableColumn label="可见组织" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ audienceLabel(row) }}
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="简介" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ asCourse(row).description || '—' }}
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="挂接文档" min-width="200">
+            <template #default="{ row }">
+              <template v-if="docLabels(row).length">
+                <ElTag
+                  v-for="name in docLabels(row)"
+                  :key="name"
+                  class="doc-tag"
+                  size="small"
+                  effect="plain"
+                >
+                  {{ name }}
+                </ElTag>
+              </template>
+              <span v-else class="muted">未挂接</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="updated_at" label="更新时间" min-width="170" />
+          <ElTableColumn v-if="canAnyWrite" label="操作" width="220" fixed="right">
+            <template #default="{ row }">
+              <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">
+                编辑
+              </ElButton>
+              <ElButton v-if="canAttach" link type="primary" @click="openAttachDocs(row)">
+                挂接文档
+              </ElButton>
+              <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">
+                删除
+              </ElButton>
+            </template>
+          </ElTableColumn>
+        </ElTable>
+      </div>
 
       <div class="pager">
         <ElPagination
@@ -515,9 +523,12 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100%;
+  min-height: 0;
 }
 
 .toolbar {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -541,10 +552,20 @@ onMounted(async () => {
 }
 
 .table-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 16px;
   background: var(--dt-bg-card);
   border: 1px solid var(--dt-border);
   border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
 .doc-tag {
@@ -557,6 +578,7 @@ onMounted(async () => {
 }
 
 .pager {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;

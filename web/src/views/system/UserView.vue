@@ -335,60 +335,68 @@ onMounted(async () => {
     </div>
 
     <div class="table-panel">
-      <ElTable v-loading="loading" :data="users" stripe empty-text="暂无用户">
-        <ElTableColumn prop="username" label="用户名" min-width="120" />
-        <ElTableColumn label="部门" min-width="140">
-          <template #default="{ row }">
-            {{ deptLabel(row) }}
-          </template>
-        </ElTableColumn>
-        <ElTableColumn label="角色" min-width="180">
-          <template #default="{ row }">
-            <template v-if="rowRoleLabels(row).length">
-              <ElTag
-                v-for="name in rowRoleLabels(row)"
-                :key="name"
-                class="role-tag"
-                size="small"
-                effect="plain"
-              >
-                {{ name }}
-              </ElTag>
-            </template>
-            <span v-else class="muted">未分配</span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="created_at" label="创建时间" min-width="170" />
-        <ElTableColumn
-          v-if="canUpdate || canResetPassword || canDelete"
-          label="操作"
-          width="240"
-          fixed="right"
+      <div class="table-scroll">
+        <ElTable
+          v-loading="loading"
+          height="100%"
+          :data="users"
+          stripe
+          empty-text="暂无用户"
         >
-          <template #default="{ row }">
-            <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">
-              编辑
-            </ElButton>
-            <ElButton
-              v-if="canResetPassword"
-              link
-              type="primary"
-              @click="openResetPwd(row)"
-            >
-              重置密码
-            </ElButton>
-            <ElButton
-              v-if="canDelete"
-              link
-              type="danger"
-              :disabled="isSelf(row)"
-              @click="onDelete(row)"
-            >
-              删除
-            </ElButton>
-          </template>
-        </ElTableColumn>
-      </ElTable>
+          <ElTableColumn prop="username" label="用户名" min-width="120" />
+          <ElTableColumn label="部门" min-width="140">
+            <template #default="{ row }">
+              {{ deptLabel(row) }}
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="角色" min-width="180">
+            <template #default="{ row }">
+              <template v-if="rowRoleLabels(row).length">
+                <ElTag
+                  v-for="name in rowRoleLabels(row)"
+                  :key="name"
+                  class="role-tag"
+                  size="small"
+                  effect="plain"
+                >
+                  {{ name }}
+                </ElTag>
+              </template>
+              <span v-else class="muted">未分配</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="created_at" label="创建时间" min-width="170" />
+          <ElTableColumn
+            v-if="canUpdate || canResetPassword || canDelete"
+            label="操作"
+            width="240"
+            fixed="right"
+          >
+            <template #default="{ row }">
+              <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">
+                编辑
+              </ElButton>
+              <ElButton
+                v-if="canResetPassword"
+                link
+                type="primary"
+                @click="openResetPwd(row)"
+              >
+                重置密码
+              </ElButton>
+              <ElButton
+                v-if="canDelete"
+                link
+                type="danger"
+                :disabled="isSelf(row)"
+                @click="onDelete(row)"
+              >
+                删除
+              </ElButton>
+            </template>
+          </ElTableColumn>
+        </ElTable>
+      </div>
 
       <div class="pager">
         <ElPagination
@@ -502,9 +510,12 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100%;
+  min-height: 0;
 }
 
 .toolbar {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -528,10 +539,20 @@ onMounted(async () => {
 }
 
 .table-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 16px;
   background: var(--dt-bg-card);
   border: 1px solid var(--dt-border);
   border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
 .role-tag {
@@ -544,6 +565,7 @@ onMounted(async () => {
 }
 
 .pager {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;

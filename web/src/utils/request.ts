@@ -52,15 +52,32 @@ function filenameFromDisposition(header: string | undefined): string | null {
   return plain?.[2]?.trim() || null
 }
 
-// 实现：统一 JSON 业务错误提示
+// 实现：统一 JSON 业务错误提示（拒绝值为中文 Error，供页面 catch 展示）
 function rejectApiBody(body: ApiResponse): Promise<never> {
-  const msg = body.message || 'request failed'
+  const msg = body.message || '请求失败'
   if (body.code === 40100) {
     void handleUnauthorized()
   } else if ([40300, 40900, 50000].includes(body.code) || body.code >= 40000) {
     ElMessage.error(msg)
   }
   return Promise.reject(new Error(msg))
+}
+
+// 实现：HTTP 错误时优先用后端 message，否则给中文兜底（避免 Axios 英文 status 文案）
+function resolveErrorMessage(
+  status: number | undefined,
+  bodyMessage: string | undefined,
+  axiosMessage: string | undefined,
+): string {
+  if (bodyMessage) return bodyMessage
+  if (status === 401) return '用户名或密码错误'
+  if (status === 403) return '没有权限执行此操作'
+  if (status === 404) return '资源不存在'
+  if (status === 409) return '操作冲突'
+  if (status === 422) return '请求参数无效'
+  if (status !== undefined && status >= 500) return '服务异常，请稍后重试'
+  if (axiosMessage && !/status code/i.test(axiosMessage)) return axiosMessage
+  return '网络错误，请稍后重试'
 }
 
 // 实现：业务 code≠0 当失败；blob 下载单独解包；HTTP 错误按规约提示
@@ -98,27 +115,27 @@ request.interceptors.response.use(
   },
   async (error: AxiosError<ApiResponse | Blob>) => {
     const status = error.response?.status
-    let msg = error.message || '网络错误，请稍后重试'
     const data = error.response?.data
+    let bodyMessage: string | undefined
     if (data instanceof Blob) {
       try {
         const body = JSON.parse(await data.text()) as ApiResponse
-        if (body.message) msg = body.message
+        if (body.message) bodyMessage = body.message
       } catch {
-        // 保持默认 msg
+        // ignore
       }
     } else if (data && typeof data === 'object' && 'message' in data && data.message) {
-      msg = data.message
+      bodyMessage = data.message
     }
+    const msg = resolveErrorMessage(status, bodyMessage, error.message)
 
     if (status === 401) {
+      // 登录失败等：不在拦截器弹窗（由页面 catch 展示），只清会话
       void handleUnauthorized()
-    } else if (status !== undefined) {
-      ElMessage.error(msg)
     } else {
       ElMessage.error(msg)
     }
-    return Promise.reject(error)
+    return Promise.reject(new Error(msg))
   },
 )
 

@@ -216,48 +216,56 @@ onMounted(async () => {
     </div>
 
     <div class="table-panel">
-      <ElTable v-loading="loading" :data="roles" stripe empty-text="暂无角色">
-        <ElTableColumn prop="code" label="code" min-width="140" />
-        <ElTableColumn prop="name" label="名称" min-width="120" />
-        <ElTableColumn label="权限码" min-width="280">
-          <template #default="{ row }">
-            <template v-if="permPreview(row).length">
-              <ElTag
-                v-for="code in permPreview(row)"
-                :key="code"
-                class="perm-tag"
-                size="small"
-                type="info"
-                effect="plain"
-              >
-                {{ code }}
-              </ElTag>
-            </template>
-            <span v-else class="muted">未配置</span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="updated_at" label="更新时间" min-width="170" />
-        <ElTableColumn
-          v-if="canUpdate || canAssignPerm || canDelete"
-          label="操作"
-          width="160"
-          fixed="right"
+      <div class="table-scroll">
+        <ElTable
+          v-loading="loading"
+          height="100%"
+          :data="roles"
+          stripe
+          empty-text="暂无角色"
         >
-          <template #default="{ row }">
-            <ElButton
-              v-if="canUpdate || canAssignPerm"
-              link
-              type="primary"
-              @click="openEdit(row)"
-            >
-              编辑
-            </ElButton>
-            <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">
-              删除
-            </ElButton>
-          </template>
-        </ElTableColumn>
-      </ElTable>
+          <ElTableColumn prop="code" label="code" min-width="140" />
+          <ElTableColumn prop="name" label="名称" min-width="120" />
+          <ElTableColumn label="权限码" min-width="280">
+            <template #default="{ row }">
+              <template v-if="permPreview(row).length">
+                <ElTag
+                  v-for="code in permPreview(row)"
+                  :key="code"
+                  class="perm-tag"
+                  size="small"
+                  type="info"
+                  effect="plain"
+                >
+                  {{ code }}
+                </ElTag>
+              </template>
+              <span v-else class="muted">未配置</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="updated_at" label="更新时间" min-width="170" />
+          <ElTableColumn
+            v-if="canUpdate || canAssignPerm || canDelete"
+            label="操作"
+            width="160"
+            fixed="right"
+          >
+            <template #default="{ row }">
+              <ElButton
+                v-if="canUpdate || canAssignPerm"
+                link
+                type="primary"
+                @click="openEdit(row)"
+              >
+                编辑
+              </ElButton>
+              <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">
+                删除
+              </ElButton>
+            </template>
+          </ElTableColumn>
+        </ElTable>
+      </div>
 
       <div class="pager">
         <ElPagination
@@ -314,9 +322,12 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100%;
+  min-height: 0;
 }
 
 .toolbar {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -340,10 +351,20 @@ onMounted(async () => {
 }
 
 .table-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 16px;
   background: var(--dt-bg-card);
   border: 1px solid var(--dt-border);
   border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
 .perm-tag {
@@ -356,6 +377,7 @@ onMounted(async () => {
 }
 
 .pager {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;

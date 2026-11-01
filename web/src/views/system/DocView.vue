@@ -407,34 +407,42 @@ onMounted(async () => {
     </div>
 
     <div class="table-panel">
-      <ElTable v-loading="loading" :data="docs" stripe empty-text="暂无文档">
-        <ElTableColumn prop="title" label="标题" min-width="160" />
-        <ElTableColumn label="归属" min-width="110">
-          <template #default="{ row }">
-            {{ deptLabel(row) }}
-          </template>
-        </ElTableColumn>
-        <ElTableColumn label="可见组织" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">
-            {{ audienceLabel(row) }}
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="original_filename" label="原文件名" min-width="140" />
-        <ElTableColumn prop="extension" label="类型" width="80" />
-        <ElTableColumn label="大小" width="100">
-          <template #default="{ row }">
-            {{ formatSize(asDoc(row).size_bytes) }}
-          </template>
-        </ElTableColumn>
-        <ElTableColumn prop="created_at" label="上传时间" min-width="170" />
-        <ElTableColumn label="操作" width="220" fixed="right">
-          <template #default="{ row }">
-            <ElButton link type="primary" @click="onDownload(row)">下载</ElButton>
-            <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">编辑</ElButton>
-            <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">删除</ElButton>
-          </template>
-        </ElTableColumn>
-      </ElTable>
+      <div class="table-scroll">
+        <ElTable
+          v-loading="loading"
+          height="100%"
+          :data="docs"
+          stripe
+          empty-text="暂无文档"
+        >
+          <ElTableColumn prop="title" label="标题" min-width="160" />
+          <ElTableColumn label="归属" min-width="110">
+            <template #default="{ row }">
+              {{ deptLabel(row) }}
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="可见组织" min-width="160" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ audienceLabel(row) }}
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="original_filename" label="原文件名" min-width="140" />
+          <ElTableColumn prop="extension" label="类型" width="80" />
+          <ElTableColumn label="大小" width="100">
+            <template #default="{ row }">
+              {{ formatSize(asDoc(row).size_bytes) }}
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="created_at" label="上传时间" min-width="170" />
+          <ElTableColumn label="操作" width="220" fixed="right">
+            <template #default="{ row }">
+              <ElButton link type="primary" @click="onDownload(row)">下载</ElButton>
+              <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">编辑</ElButton>
+              <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">删除</ElButton>
+            </template>
+          </ElTableColumn>
+        </ElTable>
+      </div>
 
       <div class="pager">
         <ElPagination
@@ -565,9 +573,12 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100%;
+  min-height: 0;
 }
 
 .toolbar {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -591,13 +602,24 @@ onMounted(async () => {
 }
 
 .table-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 16px;
   background: var(--dt-bg-card);
   border: 1px solid var(--dt-border);
   border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-scroll {
+  flex: 1;
+  min-height: 0;
 }
 
 .pager {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * 系统设置：T2 显示名、T3 登录副文案、T4 Logo。
- * 路由 system:read；保存与上传需 system:update。
+ * 系统设置：T1 个人主题（任意登录用户）+ T2/T3/T4 全局品牌（system:read 可见，system:update 可改）。
+ * 路由：已登录即可。
  */
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules, UploadFile, UploadRawFile } from 'element-plus'
 import {
   ElButton,
@@ -20,13 +20,18 @@ import {
   updateSettingsApi,
   uploadLogoApi,
 } from '@/api/system/settings'
+import { useUserStore } from '@/stores/user'
 import { hasPermission } from '@/utils/permission'
+import { DEFAULT_THEME_PRIMARY } from '@/utils/theme'
 
-const canUpdate = computed(() => hasPermission('system:update'))
+const userStore = useUserStore()
+const canReadBrand = computed(() => hasPermission('system:read'))
+const canUpdateBrand = computed(() => hasPermission('system:update'))
 
 const loading = ref(false)
 const saving = ref(false)
 const logoUploading = ref(false)
+const themeSaving = ref(false)
 const hasLogo = ref(false)
 const logoBust = ref(0)
 const formRef = ref<FormInstance>()
@@ -34,6 +39,7 @@ const form = reactive({
   site_name: '',
   login_subtitle: '',
 })
+const themeDraft = ref(userStore.themePrimary || DEFAULT_THEME_PRIMARY)
 
 const rules: FormRules<typeof form> = {
   site_name: [
@@ -50,8 +56,16 @@ const logoSrc = computed(() =>
   hasLogo.value ? `${brandLogoUrl()}?t=${logoBust.value}` : '',
 )
 
-// 实现：加载品牌设置
-async function load() {
+watch(
+  () => userStore.themePrimary,
+  (v) => {
+    themeDraft.value = v || DEFAULT_THEME_PRIMARY
+  },
+)
+
+// 实现：加载品牌设置（无 system:read 则跳过）
+async function loadBrand() {
+  if (!canReadBrand.value) return
   loading.value = true
   try {
     const data = await fetchSettingsApi()
@@ -63,9 +77,39 @@ async function load() {
   }
 }
 
+// 实现：保存个人主题色
+async function onThemeChange(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const color = input.value
+  themeDraft.value = color
+  themeSaving.value = true
+  try {
+    await userStore.setThemePrimary(color)
+    ElMessage.success('主题色已更新')
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : '主题更新失败')
+  } finally {
+    themeSaving.value = false
+  }
+}
+
+// 实现：恢复默认主题色
+async function onResetTheme() {
+  themeSaving.value = true
+  try {
+    await userStore.setThemePrimary(null)
+    themeDraft.value = DEFAULT_THEME_PRIMARY
+    ElMessage.success('已恢复默认主题色')
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : '主题更新失败')
+  } finally {
+    themeSaving.value = false
+  }
+}
+
 // 实现：保存 T2/T3
 async function onSave() {
-  if (!canUpdate.value) return
+  if (!canUpdateBrand.value) return
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
   saving.value = true
@@ -86,7 +130,7 @@ async function onSave() {
 
 // 实现：本地选图后立刻上传 Logo
 async function onLogoChange(uploadFile: UploadFile) {
-  if (!canUpdate.value) return
+  if (!canUpdateBrand.value) return
   const raw = uploadFile.raw as UploadRawFile | undefined
   if (!raw) return
   const name = raw.name.toLowerCase()
@@ -108,75 +152,145 @@ async function onLogoChange(uploadFile: UploadFile) {
 }
 
 onMounted(() => {
-  void load()
+  themeDraft.value = userStore.themePrimary || DEFAULT_THEME_PRIMARY
+  void loadBrand()
 })
 </script>
 
 <template>
-  <div v-loading="loading" class="settings-page">
-    <p class="hint">
-      此处仅维护全局品牌（显示名、登录副文案、Logo）。个人主题色请在顶栏修改。
-    </p>
+  <div class="settings-page">
+    <section class="panel">
+      <h2 class="panel-title">个人外观</h2>
+      <p class="hint">主题主色仅影响当前账号的管理台配色，任意登录用户可改。</p>
+      <div class="theme-row">
+        <label class="theme-picker">
+          <span>主题色</span>
+          <input
+            type="color"
+            :value="themeDraft"
+            :disabled="themeSaving"
+            @change="onThemeChange"
+          />
+          <code class="theme-hex">{{ themeDraft }}</code>
+        </label>
+        <ElButton :disabled="themeSaving" @click="onResetTheme">恢复默认</ElButton>
+      </div>
+    </section>
 
-    <ElForm
-      ref="formRef"
-      class="form"
-      :model="form"
-      :rules="rules"
-      label-position="top"
-      :disabled="!canUpdate"
-    >
-      <ElFormItem label="系统显示名" prop="site_name">
-        <ElInput v-model="form.site_name" maxlength="128" />
-      </ElFormItem>
-      <ElFormItem label="登录页副文案" prop="login_subtitle">
-        <ElInput v-model="form.login_subtitle" maxlength="256" />
-      </ElFormItem>
-      <ElFormItem label="Logo">
-        <div class="logo-row">
-          <img v-if="logoSrc" class="logo-preview" :src="logoSrc" alt="Logo" />
-          <span v-else class="muted">尚未上传</span>
-          <ElUpload
-            v-if="canUpdate"
-            :auto-upload="false"
-            :show-file-list="false"
-            accept=".png,.jpg,.jpeg,.webp"
-            :disabled="logoUploading"
-            @change="onLogoChange"
+    <section v-loading="loading" class="panel">
+      <h2 class="panel-title">全局品牌</h2>
+      <template v-if="canReadBrand">
+        <p class="hint">显示名、登录副文案与 Logo 对全员生效；需 system:update 才能修改。</p>
+        <ElForm
+          ref="formRef"
+          class="brand-form"
+          :model="form"
+          :rules="rules"
+          label-position="top"
+          :disabled="!canUpdateBrand"
+        >
+          <ElFormItem label="系统显示名" prop="site_name">
+            <ElInput v-model="form.site_name" maxlength="128" />
+          </ElFormItem>
+          <ElFormItem label="登录页副文案" prop="login_subtitle">
+            <ElInput v-model="form.login_subtitle" maxlength="256" />
+          </ElFormItem>
+          <ElFormItem label="Logo">
+            <div class="logo-row">
+              <img v-if="logoSrc" class="logo-preview" :src="logoSrc" alt="Logo" />
+              <span v-else class="muted">尚未上传</span>
+              <ElUpload
+                v-if="canUpdateBrand"
+                :auto-upload="false"
+                :show-file-list="false"
+                accept=".png,.jpg,.jpeg,.webp"
+                :disabled="logoUploading"
+                @change="onLogoChange"
+              >
+                <ElButton :loading="logoUploading">上传 Logo</ElButton>
+              </ElUpload>
+            </div>
+          </ElFormItem>
+          <ElButton
+            v-if="canUpdateBrand"
+            type="primary"
+            :loading="saving"
+            @click="onSave"
           >
-            <ElButton :loading="logoUploading">上传 Logo</ElButton>
-          </ElUpload>
-        </div>
-      </ElFormItem>
-      <ElButton
-        v-if="canUpdate"
-        type="primary"
-        :loading="saving"
-        @click="onSave"
-      >
-        保存文案
-      </ElButton>
-      <p v-else class="field-tip">当前账号无 system:update，无法修改品牌</p>
-    </ElForm>
+            保存文案
+          </ElButton>
+          <p v-else class="field-tip">当前账号无 system:update，无法修改品牌</p>
+        </ElForm>
+      </template>
+      <p v-else class="hint">当前账号无 system:read，不展示全局品牌配置。</p>
+    </section>
   </div>
 </template>
 
 <style scoped>
 .settings-page {
-  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.panel {
+  background: var(--dt-bg-card);
+  border: 1px solid var(--dt-border);
+  border-radius: 8px;
+  padding: 20px 24px;
+}
+
+.panel-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--dt-text);
 }
 
 .hint {
   margin: 0 0 16px;
   font-size: 13px;
   color: var(--dt-text-secondary);
+  line-height: 1.5;
 }
 
-.form {
-  background: var(--dt-bg-card);
+.theme-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.theme-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--dt-text);
+  cursor: pointer;
+}
+
+.theme-picker input {
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: 1px solid var(--dt-border);
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.theme-hex {
+  font-size: 13px;
+  color: var(--dt-text-secondary);
+}
+
+.brand-form {
+  max-width: 640px;
 }
 
 .logo-row {

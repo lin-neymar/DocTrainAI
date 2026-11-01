@@ -315,9 +315,12 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100%;
+  min-height: 0;
 }
 
 .toolbar {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -341,7 +344,9 @@ onMounted(() => {
 }
 
 .tree-panel {
-  min-height: 320px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   padding: 16px;
   background: var(--dt-bg-card);
   border: 1px solid var(--dt-border);

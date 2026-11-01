@@ -58,7 +58,8 @@ export const systemRoutes: RouteRecordRaw[] = [
         path: 'settings',
         name: 'settings',
         component: () => import('@/views/system/SettingsView.vue'),
-        meta: { title: '系统设置', permission: 'system:read' },
+        // 已登录即可：个人主题 T1；品牌区块仍按 system:read / system:update 显隐
+        meta: { title: '系统设置' },
       },
     ],
   },

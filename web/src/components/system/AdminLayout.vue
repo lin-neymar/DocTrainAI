@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /**
- * 管理台壳：浅色白底侧栏 + 顶栏。
+ * 管理台壳：浅色白底侧栏 + 顶栏；主区固定视口，内容页内部滚动。
  * 侧栏菜单来自静态子路由；显隐只用 hasPermission。
- * 顶栏提供 T1 个人主题色选择（任意登录用户）。
  */
 import { computed, onMounted, ref } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
@@ -14,7 +13,7 @@ import {
   ElMain,
   ElMenu,
   ElMenuItem,
-  ElMessage,
+  ElMessageBox,
 } from 'element-plus'
 
 import {
@@ -23,7 +22,6 @@ import {
 } from '@/api/system/settings'
 import { useUserStore } from '@/stores/user'
 import { hasPermission } from '@/utils/permission'
-import { DEFAULT_THEME_PRIMARY } from '@/utils/theme'
 
 const route = useRoute()
 const router = useRouter()
@@ -32,8 +30,6 @@ const userStore = useUserStore()
 const brandName = ref('DocTrainAI')
 const brandHasLogo = ref(false)
 const logoBust = ref(0)
-const themeDraft = ref(userStore.themePrimary || DEFAULT_THEME_PRIMARY)
-const themeSaving = ref(false)
 
 // 实现：子路由 path 转成侧栏可跳转的绝对路径
 function toMenuPath(childPath: string) {
@@ -76,44 +72,22 @@ async function loadBrand() {
   }
 }
 
-// 实现：顶栏退出并跳转登录
+// 实现：确认后退出并跳转登录
 async function onLogout() {
+  try {
+    await ElMessageBox.confirm('确定退出当前账号？', '退出登录', {
+      type: 'warning',
+      confirmButtonText: '退出',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
   await userStore.logout()
   await router.replace('/login')
 }
 
-// 实现：保存个人主题色
-async function onThemeChange(ev: Event) {
-  const input = ev.target as HTMLInputElement
-  const color = input.value
-  themeDraft.value = color
-  themeSaving.value = true
-  try {
-    await userStore.setThemePrimary(color)
-    ElMessage.success('主题色已更新')
-  } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '主题更新失败')
-  } finally {
-    themeSaving.value = false
-  }
-}
-
-// 实现：恢复默认主题色
-async function onResetTheme() {
-  themeSaving.value = true
-  try {
-    await userStore.setThemePrimary(null)
-    themeDraft.value = DEFAULT_THEME_PRIMARY
-    ElMessage.success('已恢复默认主题色')
-  } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '主题更新失败')
-  } finally {
-    themeSaving.value = false
-  }
-}
-
 onMounted(() => {
-  themeDraft.value = userStore.themePrimary || DEFAULT_THEME_PRIMARY
   void loadBrand()
 })
 </script>
@@ -136,18 +110,6 @@ onMounted(() => {
       <ElHeader class="header" height="56px">
         <div class="header-left">{{ route.meta.title || '工作台' }}</div>
         <div class="header-right">
-          <label class="theme-picker" title="个人主题色">
-            <span>主题</span>
-            <input
-              type="color"
-              :value="themeDraft"
-              :disabled="themeSaving"
-              @change="onThemeChange"
-            />
-          </label>
-          <ElButton link type="primary" :disabled="themeSaving" @click="onResetTheme">
-            默认色
-          </ElButton>
           <span class="user-line">
             {{ userStore.username }}
             <span v-if="userStore.deptName" class="dept">· {{ userStore.deptName }}</span>
@@ -164,19 +126,23 @@ onMounted(() => {
 
 <style scoped>
 .admin-layout {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: var(--dt-bg-page);
 }
 
 .aside {
+  height: 100%;
   background: var(--dt-bg-card);
   border-right: 1px solid var(--dt-border);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .brand {
   height: 56px;
+  flex-shrink: 0;
   padding: 0 16px;
   display: flex;
   align-items: center;
@@ -197,15 +163,24 @@ onMounted(() => {
 }
 
 .menu {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   border-right: none;
   background: transparent;
 }
 
 .main-wrap {
+  flex: 1;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -227,25 +202,6 @@ onMounted(() => {
   gap: 12px;
 }
 
-.theme-picker {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--dt-text-secondary);
-  cursor: pointer;
-}
-
-.theme-picker input {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--dt-border);
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-}
-
 .user-line {
   font-size: 13px;
   color: var(--dt-text-secondary);
@@ -256,6 +212,19 @@ onMounted(() => {
 }
 
 .main {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* 子页面根节点撑满主区，由页面内部滚动列表 */
+.main :deep(> *) {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
 }
 </style>
