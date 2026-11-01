@@ -45,6 +45,8 @@ const docs = ref<DocItem[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const filterTitle = ref('')
+const appliedTitle = ref('')
 
 const deptTree = ref<DeptTreeNode[]>([])
 const deptNameMap = ref<Record<string, string>>({})
@@ -191,11 +193,15 @@ async function loadDepts() {
   deptNameMap.value = collectDeptNames(tree)
 }
 
-// 实现：分页拉取可见文档
+// 实现：分页拉取可见文档（带已应用的标题条件）
 async function loadDocs() {
   loading.value = true
   try {
-    const data = await fetchDocsApi(page.value, pageSize.value)
+    const data = await fetchDocsApi({
+      page: page.value,
+      pageSize: pageSize.value,
+      title: appliedTitle.value || undefined,
+    })
     docs.value = data.items
     total.value = data.total
     page.value = data.page
@@ -203,6 +209,21 @@ async function loadDocs() {
   } finally {
     loading.value = false
   }
+}
+
+// 实现：按标题查询并回到第 1 页
+async function onSearch() {
+  appliedTitle.value = filterTitle.value.trim()
+  page.value = 1
+  await loadDocs()
+}
+
+// 实现：清空标题搜索
+async function onResetFilters() {
+  filterTitle.value = ''
+  appliedTitle.value = ''
+  page.value = 1
+  await loadDocs()
 }
 
 function asDoc(row: unknown): DocItem {
@@ -447,9 +468,19 @@ onUnmounted(() => {
 <template>
   <div class="doc-page">
     <div class="toolbar">
-      <span class="hint">
-        仅展示当前可见文档；勾选组织节点表示该节点子树可读（含日后新建下级）
-      </span>
+      <div class="filters">
+        <ElInput
+          v-model="filterTitle"
+          clearable
+          placeholder="标题"
+          class="filter-title"
+          maxlength="256"
+          @keyup.enter="onSearch"
+        />
+        <ElButton type="primary" :loading="loading" @click="onSearch">查询</ElButton>
+        <ElButton :disabled="loading" @click="onResetFilters">重置</ElButton>
+        <span class="hint">仅展示当前可见文档</span>
+      </div>
       <div class="toolbar-right">
         <ElButton :loading="loading" @click="loadDocs">刷新</ElButton>
         <ElButton v-if="canCreate" type="primary" @click="openUpload">上传文档</ElButton>
@@ -660,6 +691,21 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.filters :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.filter-title {
+  width: 200px;
 }
 
 .hint {

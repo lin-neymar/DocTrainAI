@@ -29,11 +29,22 @@ export interface DocUpdateBody {
   audience_dept_ids?: string[]
 }
 
-// 实现：GET /api/v1/docs 分页列表
-export function fetchDocsApi(page: number, pageSize: number) {
-  return request.get<unknown, PageResult<DocItem>>('/api/v1/docs', {
-    params: { page, page_size: pageSize },
-  })
+export interface DocListQuery {
+  page: number
+  pageSize: number
+  /** 标题模糊筛选（可选） */
+  title?: string
+}
+
+// 实现：GET /api/v1/docs 分页列表（可选 title）
+export function fetchDocsApi(query: DocListQuery) {
+  const params: Record<string, string | number> = {
+    page: query.page,
+    page_size: query.pageSize,
+  }
+  const title = query.title?.trim()
+  if (title) params.title = title
+  return request.get<unknown, PageResult<DocItem>>('/api/v1/docs', { params })
 }
 
 // 实现：POST /api/v1/docs multipart 上传（可选 audience JSON）

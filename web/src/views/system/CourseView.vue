@@ -143,7 +143,7 @@ async function loadVisibleDocs() {
     visibleDocs.value = []
     return
   }
-  const data = await fetchDocsApi(1, 100)
+  const data = await fetchDocsApi({ page: 1, pageSize: 100 })
   visibleDocs.value = data.items
 }
 
