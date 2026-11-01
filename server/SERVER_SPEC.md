@@ -27,9 +27,11 @@ server/
 │   │   ├── system/
 │   │   └── ai_ext/
 │   ├── workers/                # 阶段 2+：ARQ 任务。仍属于 server
+│   ├── storage/                # StorageBackend；阶段 1 仅 local
 │   └── utils/
 ├── scripts/
 │   ├── seed.py                 # 权限码、内置角色、根部门、初始管理员、默认品牌
+│   ├── purge_soft_deleted.py   # 开发库清理软删行（CLI）
 │   └── eval_retrieval.py       # 阶段 2+：命令行评估，不是在线服务
 ├── tests/
 ├── requirements.txt
@@ -42,7 +44,9 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 ## 依赖白名单
 阶段 1 可以安装：fastapi、uvicorn、sqlalchemy、pydantic-settings、alembic、psycopg、pgvector（仅驱动，阶段 1 不建向量列）、pyjwt、bcrypt、python-multipart、pytest、httpx、ruff。
 
-阶段 2 才可以安装：langchain 及其加载、切分、Embedding 所需的最小依赖、arq、redis、jieba。不安装 LangGraph。
+阶段 1 **办公预览转换**依赖本机/镜像中的 **LibreOffice（或兼容的 soffice）** 命令行，不是 pip 包；缺失时 office 预览失败须有明确错误，且原件下载仍可用。
+
+阶段 2 才可以安装：langchain 及其加载、切分、Embedding 所需的最小依赖、arq、redis、jieba；以及 S3 兼容客户端（如 boto3，实现时再写入白名单）。不安装 LangGraph。
 
 阶段 3 才可以安装：langgraph。对话调用使用已配置的兼容接口，不额外引入另一套 Agent 框架。
 
@@ -55,10 +59,10 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 - 用户：恰好一个 `dept_id`，密码只存 bcrypt 哈希。软删除后不能登录。用户名在未删除记录中唯一。可选字段：`theme_primary`（个人主题主色，如 `#1F4B7A`；空则前端用默认色）。
 - 角色与用户多对多。角色与权限码多对多。
 - 权限码是字符串，种子脚本写入，业务代码从数据库读取，不在判断处手写第二份清单。
-- 文档：归属一个部门（`dept_id`）。另有可见组织关联表（如 `doc_audience_dept`）：多行 `dept_id`，每行表示该节点**子树**可读。字段限于身份与文件元数据：标题、归属部门、原始文件名、扩展名、大小、存储键、sha256、上传人、时间、软删除。不含解析状态和正文。
+- 文档：归属一个部门（`dept_id`）。另有可见组织关联表（如 `doc_audience_dept`）：多行 `dept_id`，每行表示该节点**子树**可读。字段限于身份与文件元数据：标题、归属部门、原始文件名、扩展名、大小、**原件 `storage_key`**、可选 **`preview_storage_key`**（预览用 PDF 等）、sha256、上传人、时间、软删除。不含解析状态、正文、向量。
 - 课程：归属一个部门，与文档多对多；同样有 `course_audience_dept`。删除课程不删除文档。课程链接不改变文档的可见性。
 - 系统品牌（全局一行或键值）：显示名、登录副文案、Logo 存储键。不含主题色（主题色在用户个人字段）。
-- 原文件与 Logo 放在 `FILE_STORAGE_DIR`。软删除不立即清除磁盘文件。
+- **存储抽象 `StorageBackend`**：`put` / `open`（或 read）/ `delete` / `exists`；业务与阶段 2 worker 只依赖该接口与 `storage_key`。阶段 1 实现 **Local**（根目录 `FILE_STORAGE_DIR`）。`.env` 可预留 `STORAGE_BACKEND=local|s3` 与 `S3_*`，阶段 1 **禁止**实现 S3 客户端。软删除业务行不立即删除存储对象。
 
 可见性 / 范围函数签名之后不改：
 
@@ -122,7 +126,9 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 - 部门：读需 `dept:read`；写需对应 `dept:create|update|delete`，并受管理范围约束。
 - 用户：读需 `user:read`；写需对应细码；`PUT /users/{id}/password` 需 `user:reset_password`；`POST /users/batch-delete`（body: `ids`，最多 100）需 `user:delete`，跳过自己，越范围整批失败；均受管理范围约束。创建/更新可传 `role_ids`（操作者有 `user:update` 即可；拉角色列表另需 `role:read`）。
 - 角色：读需 `role:read`；写需对应细码；`GET /permissions` 与 `PUT /roles/{id}/permissions` 需 `role:assign_perm`。
-- 文档：读/下载需 `doc:read` + `get_visible_doc_ids`；上传 `doc:create`；改元数据与 audience `doc:update`；软删 `doc:delete`。写路径归属部门受管理范围约束。
+- 文档：读/下载/预览需 `doc:read` + `get_visible_doc_ids`；列表可选 `title` 模糊筛选；上传 `doc:create`；改元数据与 audience `doc:update`；软删 `doc:delete`；`POST /docs/batch-delete`（body: `ids`，最多 100）需 `doc:delete`，越管理范围整批失败。写路径归属部门受管理范围约束。
+  - `GET /docs/{id}/file`：原件下载。
+  - `GET /docs/{id}/preview`：预览流（见「上传与预览」）。
 - 课程：读需 `course:read` + 课程 audience 规则；写拆细码；`PUT /courses/{id}/docs` 需 `course:attach_doc`，文档须对操作者可见。
 - 系统品牌：
   - `GET /system/brand`（或等价路径）：**公开只读**，返回显示名、副文案、Logo 访问信息，供登录页。不鉴权。
@@ -132,12 +138,20 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 
 列表分页：`page` 从 1，`page_size` 默认 20，最大 100。
 
-不在可见集合内的详情/下载返回 404。
+不在可见集合内的详情/下载/预览返回 404。
 
-## 🔴 上传
-业务文档：允许的扩展名和大小上限放在**环境变量**配置中。阶段 1 默认只允许 pdf、md，上限 20MB。校验扩展名和文件头。
+## 🔴 上传与预览
+业务文档：允许的扩展名和大小上限放在**环境变量**配置中。
 
-Logo（T4）：单独限制较小体积与图片扩展名（如 png/jpg/webp），细则实现时写入配置常量或 env，不做成设置页可改项。
+- 阶段 1 默认扩展名：`pdf,md,docx,xlsx,pptx`（`ALLOWED_EXTENSIONS` 可覆盖）。
+- 默认大小上限 20MB（`FILE_MAX_MB`）；校验扩展名与文件头/容器特征。
+- 上传经 `StorageBackend.put` 写入原件，得到 `storage_key`。
+- **预览**：
+  - `pdf` / `md`：预览可直接使用原件（不必另存 `preview_storage_key`）。
+  - `docx` / `xlsx` / `pptx`：用 LibreOffice 转为 PDF，经同一存储抽象写入，键写入 `preview_storage_key`。阶段 1 **不**用 ARQ；允许在上传成功后同步转换，或首次预览时同步转换（须有超时与失败信息）。转换失败不得导致原件上传失败回滚（若选上传后转换）；用户仍可下载原件。
+- 预览产物**不是**阶段 2 检索分片；阶段 2 始终从原件 `storage_key` 解析。
+
+Logo（T4）：单独限制较小体积与图片扩展名（如 png/jpg/webp），细则实现时写入配置常量或 env，不做成设置页可改项；Logo 也走存储抽象。
 
 ## 🔴 异常、删除与配置
 全局异常处理器产出 PROJECT_SPEC 规定的响应体。预期内的 403、404、409 不打印堆栈。
@@ -146,17 +160,17 @@ Logo（T4）：单独限制较小体积与图片扩展名（如 png/jpg/webp）�
 
 阶段 1 的环境变量：
 
-`APP_ENV`、`DATABASE_URL`、`JWT_SECRET`、`JWT_EXPIRE_MINUTES`、`FILE_STORAGE_DIR`、`FILE_MAX_MB`、`ALLOWED_EXTENSIONS`、`CORS_ORIGINS`、`INIT_ADMIN_USERNAME`、`INIT_ADMIN_PASSWORD`
+`APP_ENV`、`DATABASE_URL`、`JWT_SECRET`、`JWT_EXPIRE_MINUTES`、`FILE_STORAGE_DIR`、`FILE_MAX_MB`、`ALLOWED_EXTENSIONS`、`CORS_ORIGINS`、`INIT_ADMIN_USERNAME`、`INIT_ADMIN_PASSWORD`、`STORAGE_BACKEND`（阶段 1 固定按 `local` 使用；可预留取值说明）、以及注释预留的 `S3_ENDPOINT` / `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_REGION`（阶段 1 不读取实现）
 
 `compose.yaml` 在阶段 1 只声明 PostgreSQL 16，镜像使用 `pgvector/pgvector`。数据库对外端口和账号写入 `.env.example`，不写进代码。
 
 ## 🔴 阶段 1 测试
-pytest 至少覆盖：登录成功与失败、无令牌 401、缺权限码 403、audience 外文档详情 404、有 `doc:read` 且落在 audience 子树内可读、超管无 audience 时亦不可仅凭 `data:scope:all` 读到未授权文档、品牌公开接口可匿名读、无 `system:update` 不能改品牌、登录用户可改本人主题。
+pytest 至少覆盖：登录成功与失败、无令牌 401、缺权限码 403、audience 外文档详情/下载/预览 404、有 `doc:read` 且落在 audience 子树内可读、超管无 audience 时亦不可仅凭 `data:scope:all` 读到未授权文档、品牌公开接口可匿名读、无 `system:update` 不能改品牌、登录用户可改本人主题；上传拒绝不在白名单的扩展名。
 
 ## 🔴 阶段 2 契约（现在不实现）
-解析任务、分片、向量和全文索引入 `models/ai_ext`。文档主表不加状态列。任务状态为 `pending`、`running`、`succeeded`、`failed`，失败时保存错误摘要。
+解析任务、分片、向量和全文索引入 `models/ai_ext`。文档主表不加解析状态列。任务状态为 `pending`、`running`、`succeeded`、`failed`，失败时保存错误摘要。Worker 通过 `StorageBackend` 读取原件（Local 或届时的 S3 实现）。
 
-分片保存 `doc_id`、正文、位置（pdf 页码或 md 标题）和检索所需字段。md 先按标题切开，pdf 先按页切开，再按 `CHUNK_SIZE` 与 `CHUNK_OVERLAP` 控制长度。两个数值来自配置。
+分片保存 `doc_id`、正文、位置（pdf 页码、md 标题、office 近似位置等）和检索所需字段。按扩展名选择 Loader；再按 `CHUNK_SIZE` 与 `CHUNK_OVERLAP` 控制长度。两个数值来自配置。
 
 向量维度等于 `EMBEDDING_DIM`，必须与 `EMBEDDING_MODEL` 一致。更换维度时新建迁移，不在旧列里混放不同维度。
 

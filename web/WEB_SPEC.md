@@ -49,12 +49,13 @@ src/
 9. `system` 下的视图和组件禁止导入 `components/ai_ext`、`views/ai_ext` 和对话 store。
 10. 阶段 2 的文档页可以调用 `api/ai_ext` 显示解析状态。阶段 2 开放之前，文档页不调用这个接口。
 11. **系统设置与主题**：
-    - T1：任意已登录用户可在个人入口（如顶栏或「外观」）修改主题主色；调用本人主题接口；立即应用到 CSS 变量（默认主色 `#1F4B7A`）。
-    - T2/T3/T4：仅持有 `system:update` 的用户在「系统设置」页修改；菜单/路由使用 `system:read`。登录页通过公开品牌接口展示显示名、副文案、Logo。
+    - T1：任意已登录用户可在「系统设置」页的「个人外观」修改主题主色；调用本人主题接口；立即应用到 CSS 变量（默认主色 `#1F4B7A`）。顶栏不放置主题取色。
+    - T2/T3/T4：仅持有 `system:update` 的用户可改；设置页内「全局品牌」区块按 `system:read` 可见、`system:update` 可改。登录页通过公开品牌接口展示显示名、副文案、Logo。
     - 禁止用角色 code 判断能否改品牌；只认 `system:update`。
+12. **文档预览**：文档列表提供「查看」。调用预览接口（鉴权代下 blob）；pdf 用页内嵌入预览；md 用文本展示（阶段 1 不强制引入 markdown 渲染库）；office 预览流为 PDF，同样嵌入。关闭预览须释放对象 URL。阶段 1 不展示解析状态。
 
 ## 阶段页面
-阶段 1：登录、工作台、部门树、用户、角色权限、文档上传与列表（含归属与可见组织，部门管理员无可见勾选）、课程及挂接文档、系统设置（T2/T3/T4）与个人主题（T1）。文档列表不展示解析状态。
+阶段 1：登录、工作台、部门树、用户、角色权限、文档上传与列表（含归属与可见组织、标题搜索、批量删除、查看预览；部门管理员无可见勾选；允许 pdf/md/docx/xlsx/pptx）、课程及挂接文档、系统设置（已登录可进：T1 人人可改；T2～T4 按码显隐）。文档列表不展示解析状态。
 
 阶段 2：在现有文档列表增加解析状态。不新增知识库页面。
 
@@ -84,9 +85,9 @@ SSE 的读取放在 `utils/sse.ts`。组件只消费已经解析好的 `delta`�
 | 部门管理 | `dept:read`；写按钮 `dept:create` / `dept:update` / `dept:delete`；根部门写另需后端校验 `data:scope:all` |
 | 用户管理 | `user:read`；写按钮对应 `user:create` 等；重置密码 `user:reset_password`；角色勾选依赖 `role:read`；有 `user:delete` 时表格多选 + 批量删除（当前页） |
 | 角色管理 | `role:assign_perm`（仅配置权限与角色维护入口）；无此码不进菜单。`role:read` 供其他页拉列表 |
-| 文档管理 | `doc:read`；上传 `doc:create`；编辑 `doc:update`；删除 `doc:delete` |
+| 文档管理 | `doc:read`；上传 `doc:create`；编辑 `doc:update`；删除 `doc:delete`；查看预览（`doc:read`）；标题搜索；有 `doc:delete` 时多选批量删 |
 | 课程管理 | `course:read`；创建/编辑 `course:create`/`course:update`；删除 `course:delete`；挂接 `course:attach_doc` |
-| 系统设置 | `system:read`；保存品牌与 Logo `system:update` |
-| 个人主题 T1 | 无独立路由权限；已登录可改 |
+| 系统设置 | 已登录即可（无 `meta.permission`）；页内品牌区 `system:read` / `system:update` |
+| 个人主题 T1 | 无独立路由权限；设置页内已登录可改 |
 
 对话页在阶段 3 使用 `agent:chat`。
