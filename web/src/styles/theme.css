@@ -19,6 +19,10 @@
   --el-color-primary-light-8: #c4d3e2;
   --el-color-primary-light-9: #e8eef5;
   --el-color-primary-dark-2: var(--dt-color-primary-hover);
+
+  /* 管理列表行高：比 Element 默认略高，用户/角色/文档/课程等 ElTable 共用 */
+  --dt-table-cell-padding-y: 14px;
+  --dt-table-cell-padding-x: 12px;
 }
 
 html,
@@ -34,4 +38,9 @@ body,
     system-ui,
     -apple-system,
     sans-serif;
+}
+
+/* 全局加高表格行；各业务页不必再单独写行高 */
+.el-table .el-table__cell {
+  padding: var(--dt-table-cell-padding-y) var(--dt-table-cell-padding-x);
 }
