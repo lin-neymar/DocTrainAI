@@ -8,18 +8,16 @@ import type { FormInstance, FormRules, UploadFile, UploadRawFile } from 'element
 import {
   ElButton,
   ElDialog,
-  ElDrawer,
   ElForm,
   ElFormItem,
   ElInput,
   ElMessage,
   ElMessageBox,
-  ElOption,
   ElPagination,
-  ElSelect,
   ElTable,
   ElTableColumn,
   ElTree,
+  ElTreeSelect,
   ElUpload,
 } from 'element-plus'
 
@@ -33,11 +31,7 @@ import {
   uploadDocApi,
   type DocItem,
 } from '@/api/system/doc'
-import {
-  audienceTreeForOwner,
-  canCustomizeAudience,
-  collectSubtreeIds,
-} from '@/utils/audience'
+import { audienceTreeForOwner, canCustomizeAudience, collectSubtreeIds } from '@/utils/audience'
 import { formatDateTime } from '@/utils/datetime'
 import { hasPermission } from '@/utils/permission'
 
@@ -53,8 +47,12 @@ const page = ref(1)
 const pageSize = ref(20)
 
 const deptTree = ref<DeptTreeNode[]>([])
-const deptOptions = ref<{ id: string; label: string }[]>([])
 const deptNameMap = ref<Record<string, string>>({})
+const deptTreeSelectProps = {
+  value: 'id',
+  label: 'name',
+  children: 'children',
+} as const
 
 const canCreate = computed(() => hasPermission('doc:create'))
 const canUpdate = computed(() => hasPermission('doc:update'))
@@ -83,12 +81,8 @@ const editForm = reactive({
 })
 const pendingEditAudience = ref<string[]>([])
 
-const uploadAudienceTree = computed(() =>
-  audienceTreeForOwner(deptTree.value, uploadForm.dept_id),
-)
-const editAudienceTree = computed(() =>
-  audienceTreeForOwner(deptTree.value, editForm.dept_id),
-)
+const uploadAudienceTree = computed(() => audienceTreeForOwner(deptTree.value, uploadForm.dept_id))
+const editAudienceTree = computed(() => audienceTreeForOwner(deptTree.value, editForm.dept_id))
 
 const treeProps = { label: 'name', children: 'children' }
 
@@ -109,7 +103,7 @@ const uploadRules: FormRules<typeof uploadForm> = {
   ],
 }
 
-/** 预览抽屉：pdf/office→iframe；md→纯文本；关闭时 revoke blob URL */
+/** 预览弹窗：pdf/office→iframe；md→纯文本；关闭时 revoke blob URL */
 const previewVisible = ref(false)
 const previewLoading = ref(false)
 const previewTitle = ref('')
@@ -172,28 +166,29 @@ const editRules: FormRules<typeof editForm> = {
   dept_id: [{ required: true, message: '请选择归属部门', trigger: 'change' }],
 }
 
-// 实现：部门树展平为下拉（缩进表示层级）
-function flattenDepts(nodes: DeptTreeNode[]) {
-  const opts: { id: string; label: string }[] = []
+// 实现：遍历部门树，收集 id→名称（列表展示用）
+function collectDeptNames(nodes: DeptTreeNode[]): Record<string, string> {
   const names: Record<string, string> = {}
-  const walk = (list: DeptTreeNode[], depth: number) => {
+  const walk = (list: DeptTreeNode[]) => {
     for (const n of list) {
-      const prefix = depth > 0 ? `${'—'.repeat(depth)} ` : ''
-      opts.push({ id: n.id, label: `${prefix}${n.name}` })
       names[n.id] = n.name
-      walk(n.children, depth + 1)
+      if (n.children?.length) walk(n.children)
     }
   }
-  walk(nodes, 0)
-  return { opts, names }
+  walk(nodes)
+  return names
 }
 
+// 实现：取树中第一个节点 id（上传默认归属）
+function firstDeptId(nodes: DeptTreeNode[]): string {
+  return nodes[0]?.id ?? ''
+}
+
+// 实现：加载可见部门树（表单 TreeSelect，列表用名称映射）
 async function loadDepts() {
   const tree = await fetchDeptTreeApi()
   deptTree.value = tree
-  const { opts, names } = flattenDepts(tree)
-  deptOptions.value = opts
-  deptNameMap.value = names
+  deptNameMap.value = collectDeptNames(tree)
 }
 
 // 实现：分页拉取可见文档
@@ -245,7 +240,7 @@ async function setAudienceKeys(treeRef: TreeExpose | undefined, keys: string[]) 
 function openUpload() {
   if (!canCreate.value) return
   uploadForm.title = ''
-  uploadForm.dept_id = deptOptions.value[0]?.id ?? ''
+  uploadForm.dept_id = firstDeptId(deptTree.value)
   uploadForm.file = null
   fileList.value = []
   uploadVisible.value = true
@@ -269,10 +264,7 @@ function openEdit(row: unknown) {
 
 watch(uploadVisible, (open) => {
   if (!open || !showAudiencePicker.value) return
-  void setAudienceKeys(
-    uploadAudienceTreeRef.value,
-    uploadForm.dept_id ? [uploadForm.dept_id] : [],
-  )
+  void setAudienceKeys(uploadAudienceTreeRef.value, uploadForm.dept_id ? [uploadForm.dept_id] : [])
 })
 
 watch(editVisible, (open) => {
@@ -334,12 +326,7 @@ async function onUploadSubmit() {
 
   uploadLoading.value = true
   try {
-    await uploadDocApi(
-      uploadForm.title.trim(),
-      uploadForm.dept_id,
-      uploadForm.file,
-      audience,
-    )
+    await uploadDocApi(uploadForm.title.trim(), uploadForm.dept_id, uploadForm.file, audience)
     ElMessage.success('上传成功')
     uploadVisible.value = false
     page.value = 1
@@ -471,13 +458,7 @@ onUnmounted(() => {
 
     <div class="table-panel">
       <div class="table-scroll">
-        <ElTable
-          v-loading="loading"
-          height="100%"
-          :data="docs"
-          stripe
-          empty-text="暂无文档"
-        >
+        <ElTable v-loading="loading" height="100%" :data="docs" stripe empty-text="暂无文档">
           <ElTableColumn prop="title" label="标题" min-width="160" />
           <ElTableColumn label="归属" min-width="110">
             <template #default="{ row }">
@@ -533,24 +514,21 @@ onUnmounted(() => {
       destroy-on-close
       @closed="uploadFormRef?.resetFields()"
     >
-      <ElForm
-        ref="uploadFormRef"
-        :model="uploadForm"
-        :rules="uploadRules"
-        label-position="top"
-      >
+      <ElForm ref="uploadFormRef" :model="uploadForm" :rules="uploadRules" label-position="top">
         <ElFormItem label="标题" prop="title">
           <ElInput v-model="uploadForm.title" maxlength="256" />
         </ElFormItem>
         <ElFormItem label="归属部门" prop="dept_id">
-          <ElSelect v-model="uploadForm.dept_id" filterable style="width: 100%">
-            <ElOption
-              v-for="opt in deptOptions"
-              :key="opt.id"
-              :label="opt.label"
-              :value="opt.id"
-            />
-          </ElSelect>
+          <ElTreeSelect
+            v-model="uploadForm.dept_id"
+            :data="deptTree"
+            :props="deptTreeSelectProps"
+            check-strictly
+            filterable
+            default-expand-all
+            placeholder="请选择归属部门"
+            style="width: 100%"
+          />
         </ElFormItem>
         <ElFormItem v-if="showAudiencePicker" label="可见组织">
           <p class="field-tip">勾选节点后，该节点及下级部门人员可读；不级联勾选子节点。</p>
@@ -584,16 +562,15 @@ onUnmounted(() => {
       </ElForm>
       <template #footer>
         <ElButton @click="uploadVisible = false">取消</ElButton>
-        <ElButton type="primary" :loading="uploadLoading" @click="onUploadSubmit">
-          上传
-        </ElButton>
+        <ElButton type="primary" :loading="uploadLoading" @click="onUploadSubmit"> 上传 </ElButton>
       </template>
     </ElDialog>
 
-    <ElDrawer
+    <ElDialog
       v-model="previewVisible"
       :title="previewTitle || '文档预览'"
-      size="72%"
+      width="1045px"
+      top="5vh"
       destroy-on-close
       @closed="onPreviewClosed"
     >
@@ -608,7 +585,7 @@ onUnmounted(() => {
         <pre v-else-if="previewKind === 'md'" class="preview-md">{{ previewText }}</pre>
         <p v-else-if="!previewLoading" class="preview-empty">暂无预览内容</p>
       </div>
-    </ElDrawer>
+    </ElDialog>
 
     <ElDialog
       v-model="editVisible"
@@ -622,14 +599,16 @@ onUnmounted(() => {
           <ElInput v-model="editForm.title" maxlength="256" />
         </ElFormItem>
         <ElFormItem label="归属部门" prop="dept_id">
-          <ElSelect v-model="editForm.dept_id" filterable style="width: 100%">
-            <ElOption
-              v-for="opt in deptOptions"
-              :key="opt.id"
-              :label="opt.label"
-              :value="opt.id"
-            />
-          </ElSelect>
+          <ElTreeSelect
+            v-model="editForm.dept_id"
+            :data="deptTree"
+            :props="deptTreeSelectProps"
+            check-strictly
+            filterable
+            default-expand-all
+            placeholder="请选择归属部门"
+            style="width: 100%"
+          />
         </ElFormItem>
         <ElFormItem v-if="showAudiencePicker" label="可见组织">
           <div class="audience-tree">
@@ -646,7 +625,6 @@ onUnmounted(() => {
           </div>
         </ElFormItem>
         <p v-else class="field-tip">可见范围固定为您所在部门（由服务端写入）。</p>
-        <p class="field-tip">阶段 1 不支持覆盖原文件，仅改标题、部门与可见组织。</p>
       </ElForm>
       <template #footer>
         <ElButton @click="editVisible = false">取消</ElButton>
@@ -733,8 +711,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  height: calc(100vh - 120px);
-  min-height: 320px;
+  height: min(82vh, 825px);
+  min-height: 410px;
 }
 
 .preview-hint {

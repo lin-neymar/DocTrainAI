@@ -20,6 +20,7 @@ import {
   ElTableColumn,
   ElTag,
   ElTree,
+  ElTreeSelect,
 } from 'element-plus'
 
 import {
@@ -52,8 +53,12 @@ const page = ref(1)
 const pageSize = ref(20)
 
 const deptTree = ref<DeptTreeNode[]>([])
-const deptOptions = ref<{ id: string; label: string }[]>([])
 const deptNameMap = ref<Record<string, string>>({})
+const deptTreeSelectProps = {
+  value: 'id',
+  label: 'name',
+  children: 'children',
+} as const
 const visibleDocs = ref<DocItem[]>([])
 const docTitleMap = computed(() => {
   const map: Record<string, string> = {}
@@ -107,28 +112,29 @@ const formTitle = computed(() =>
   formMode.value === 'create' ? '新增课程' : '编辑课程',
 )
 
-// 实现：部门树展平为下拉
-function flattenDepts(nodes: DeptTreeNode[]) {
-  const opts: { id: string; label: string }[] = []
+// 实现：遍历部门树，收集 id→名称（列表展示用）
+function collectDeptNames(nodes: DeptTreeNode[]): Record<string, string> {
   const names: Record<string, string> = {}
-  const walk = (list: DeptTreeNode[], depth: number) => {
+  const walk = (list: DeptTreeNode[]) => {
     for (const n of list) {
-      const prefix = depth > 0 ? `${'—'.repeat(depth)} ` : ''
-      opts.push({ id: n.id, label: `${prefix}${n.name}` })
       names[n.id] = n.name
-      walk(n.children, depth + 1)
+      if (n.children?.length) walk(n.children)
     }
   }
-  walk(nodes, 0)
-  return { opts, names }
+  walk(nodes)
+  return names
 }
 
+// 实现：取树中第一个节点 id（新建默认归属）
+function firstDeptId(nodes: DeptTreeNode[]): string {
+  return nodes[0]?.id ?? ''
+}
+
+// 实现：加载可见部门树（表单 TreeSelect，列表用名称映射）
 async function loadDepts() {
   const tree = await fetchDeptTreeApi()
   deptTree.value = tree
-  const { opts, names } = flattenDepts(tree)
-  deptOptions.value = opts
-  deptNameMap.value = names
+  deptNameMap.value = collectDeptNames(tree)
 }
 
 // 实现：拉取可见文档（挂接多选与标题展示；无 doc:read 则跳过）
@@ -192,7 +198,7 @@ function openCreate() {
   editingId.value = null
   form.title = ''
   form.description = ''
-  form.dept_id = deptOptions.value[0]?.id ?? ''
+  form.dept_id = firstDeptId(deptTree.value)
   pendingAudience.value = form.dept_id ? [form.dept_id] : []
   formVisible.value = true
 }
@@ -457,14 +463,16 @@ onMounted(async () => {
           />
         </ElFormItem>
         <ElFormItem label="归属部门" prop="dept_id">
-          <ElSelect v-model="form.dept_id" filterable style="width: 100%">
-            <ElOption
-              v-for="opt in deptOptions"
-              :key="opt.id"
-              :label="opt.label"
-              :value="opt.id"
-            />
-          </ElSelect>
+          <ElTreeSelect
+            v-model="form.dept_id"
+            :data="deptTree"
+            :props="deptTreeSelectProps"
+            check-strictly
+            filterable
+            default-expand-all
+            placeholder="请选择归属部门"
+            style="width: 100%"
+          />
         </ElFormItem>
         <ElFormItem v-if="showAudiencePicker" label="可见组织">
           <p class="field-tip">勾选节点后，该节点及下级部门人员可读；不级联勾选子节点。</p>
