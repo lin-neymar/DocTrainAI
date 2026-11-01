@@ -63,3 +63,15 @@ export function resetUserPasswordApi(userId: string, password: string) {
 export function deleteUserApi(userId: string) {
   return request.delete<unknown, unknown>(`/api/v1/users/${userId}`)
 }
+
+export interface UserBatchDeleteResult {
+  deleted_count: number
+  skipped_self: boolean
+}
+
+// 实现：POST /api/v1/users/batch-delete
+export function batchDeleteUsersApi(ids: string[]) {
+  return request.post<unknown, UserBatchDeleteResult>('/api/v1/users/batch-delete', {
+    ids,
+  })
+}

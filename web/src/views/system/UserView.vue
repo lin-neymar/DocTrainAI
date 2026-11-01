@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
  * 用户管理：路由 user:read；写按钮拆 create/update/delete/reset_password。
- * 列表支持按用户名模糊搜索；角色勾选依赖 role:read。
+ * 列表支持按用户名模糊搜索；有 user:delete 时多选 + 批量删除（当前页）。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import {
   ElButton,
   ElDialog,
@@ -24,6 +24,7 @@ import {
 import { fetchDeptTreeApi, type DeptTreeNode } from '@/api/system/dept'
 import { fetchRolesApi, type RoleItem } from '@/api/system/role'
 import {
+  batchDeleteUsersApi,
   createUserApi,
   deleteUserApi,
   fetchUsersApi,
@@ -38,10 +39,13 @@ import { hasPermission } from '@/utils/permission'
 const userStore = useUserStore()
 
 const loading = ref(false)
+const batchDeleting = ref(false)
 const users = ref<UserItem[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const tableRef = ref<TableInstance>()
+const selectedUsers = ref<UserItem[]>([])
 
 /** 搜索表单（点「查询」后写入 appliedUsername，避免输入时误触发） */
 const filterUsername = ref('')
@@ -165,9 +169,20 @@ async function loadUsers() {
     total.value = data.total
     page.value = data.page
     pageSize.value = data.page_size
+    selectedUsers.value = []
+    tableRef.value?.clearSelection()
   } finally {
     loading.value = false
   }
+}
+
+// 实现：同步当前页勾选（自己不可选，由 selectable 控制）
+function onSelectionChange(rows: UserItem[]) {
+  selectedUsers.value = rows
+}
+
+function canSelectRow(row: UserItem) {
+  return row.id !== userStore.userId
 }
 
 // 实现：按用户名查询并回到第 1 页
@@ -311,6 +326,50 @@ async function onDelete(row: unknown) {
   }
 }
 
+// 实现：批量软删除当前页勾选用户
+async function onBatchDelete() {
+  if (!canDelete.value || batchDeleting.value) return
+  const targets = selectedUsers.value.filter((u) => u.id !== userStore.userId)
+  if (!targets.length) {
+    ElMessage.warning('请先勾选要删除的用户')
+    return
+  }
+  const preview = targets
+    .slice(0, 3)
+    .map((u) => u.username)
+    .join('、')
+  const more = targets.length > 3 ? ` 等 ${targets.length} 人` : ''
+  try {
+    await ElMessageBox.confirm(
+      `确定删除所选用户「${preview}${more}」？共 ${targets.length} 人。`,
+      '批量删除',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+      },
+    )
+  } catch {
+    return
+  }
+  batchDeleting.value = true
+  try {
+    const result = await batchDeleteUsersApi(targets.map((u) => u.id))
+    const tip = result.skipped_self
+      ? `已删除 ${result.deleted_count} 人（已跳过当前账号）`
+      : `已删除 ${result.deleted_count} 人`
+    ElMessage.success(tip)
+    if (targets.length >= users.value.length && page.value > 1) {
+      page.value -= 1
+    }
+    await loadUsers()
+  } catch {
+    // 拦截器已提示
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
 function deptLabel(row: unknown) {
   const u = asUser(row)
   return deptNameMap.value[u.dept_id] || u.dept_id.slice(0, 8)
@@ -363,6 +422,16 @@ onMounted(async () => {
         <ElButton :disabled="loading" @click="onResetFilters">重置</ElButton>
       </div>
       <div class="toolbar-right">
+        <ElButton
+          v-if="canDelete"
+          type="danger"
+          plain
+          :disabled="!selectedUsers.length || batchDeleting"
+          :loading="batchDeleting"
+          @click="onBatchDelete"
+        >
+          批量删除{{ selectedUsers.length ? ` (${selectedUsers.length})` : '' }}
+        </ElButton>
         <ElButton :loading="loading" @click="loadUsers">刷新</ElButton>
         <ElButton v-if="canCreate" type="primary" @click="openCreate">新增用户</ElButton>
       </div>
@@ -371,12 +440,20 @@ onMounted(async () => {
     <div class="table-panel">
       <div class="table-scroll">
         <ElTable
+          ref="tableRef"
           v-loading="loading"
           height="100%"
           :data="users"
           stripe
           empty-text="暂无用户"
+          @selection-change="onSelectionChange"
         >
+          <ElTableColumn
+            v-if="canDelete"
+            type="selection"
+            width="48"
+            :selectable="canSelectRow"
+          />
           <ElTableColumn prop="username" label="用户名" min-width="120" />
           <ElTableColumn label="部门" min-width="140">
             <template #default="{ row }">
