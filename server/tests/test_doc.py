@@ -109,6 +109,20 @@ def test_upload_list_download_update_delete(admin_headers: dict[str, str]) -> No
     assert again.status_code == 404
 
 
+def _minimal_ooxml(marker_path: str) -> bytes:
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(marker_path, "<xml/>")
+        zf.writestr(
+            "[Content_Types].xml",
+            '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>',
+        )
+    return buf.getvalue()
+
+
 def test_reject_bad_extension_and_magic(admin_headers: dict[str, str]) -> None:
     root_id = _root_dept_id()
 
@@ -129,6 +143,45 @@ def test_reject_bad_extension_and_magic(admin_headers: dict[str, str]) -> None:
     )
     assert fake_pdf.status_code == 422
     assert fake_pdf.json()["code"] == 42200
+
+    fake_docx = client.post(
+        "/api/v1/docs",
+        headers=admin_headers,
+        data={"title": "fake-docx", "dept_id": root_id},
+        files={"file": ("fake.docx", b"PK\x03\x04not-a-zip", "application/octet-stream")},
+    )
+    assert fake_docx.status_code == 422
+    assert fake_docx.json()["code"] == 42200
+
+
+def test_upload_docx_ok(
+    admin_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """合法 OOXML docx 可上传（预览转换属 D3，本测只验收入库）。"""
+    from app.config import settings
+
+    monkeypatch.setattr(
+        settings, "allowed_extensions", "pdf,md,docx,xlsx,pptx"
+    )
+    root_id = _root_dept_id()
+    payload = _minimal_ooxml("word/document.xml")
+    created = client.post(
+        "/api/v1/docs",
+        headers=admin_headers,
+        data={"title": f"docx-{uuid.uuid4().hex[:6]}", "dept_id": root_id},
+        files={
+            "file": (
+                "demo.docx",
+                payload,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()["data"]
+    assert body["extension"] == "docx"
+    assert "storage_key" not in body
+    assert "preview_storage_key" not in body
 
 
 def test_staff_cannot_see_other_branch_doc(admin_headers: dict[str, str]) -> None:

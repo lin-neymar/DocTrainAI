@@ -34,8 +34,12 @@ class Doc(Base):
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     extension: Mapped[str] = mapped_column(String(16), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    # 相对 FILE_STORAGE_DIR 的存储路径/键，由上传 service 生成
+    # 原件 storage_key（经 StorageBackend）；勿存绝对路径
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    # 预览件键（如 office→PDF）；可空；不是阶段 2 解析状态
+    preview_storage_key: Mapped[str | None] = mapped_column(
+        String(512), nullable=True
+    )
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
 
     uploaded_by: Mapped[uuid.UUID] = mapped_column(

@@ -38,8 +38,8 @@ class Settings(BaseSettings):
     # F0：文档原文件存储与上传限制（相对路径相对于 server/）
     file_storage_dir: str = "storage"
     file_max_mb: int = 20
-    # 英文逗号分隔，不含点号；默认 pdf,md（D2 再扩 office）
-    allowed_extensions: str = "pdf,md"
+    # 英文逗号分隔，不含点号；默认含办公格式
+    allowed_extensions: str = "pdf,md,docx,xlsx,pptx"
 
     # 存储后端：阶段 1 仅 local；s3 等取值阶段 1 禁止实现客户端
     storage_backend: str = "local"
