@@ -54,6 +54,21 @@ class Settings(BaseSettings):
     libreoffice_path: str | None = None
     libreoffice_timeout_seconds: int = 60
 
+    # ---------- 阶段 2：队列 / Embedding / 切分 / 混合检索 ----------
+    # Redis 仅 ARQ；业务数据仍在 Postgres
+    redis_url: str = "redis://127.0.0.1:6379/0"
+
+    embedding_base_url: str = ""
+    embedding_api_key: str = ""
+    embedding_model:str = "text-embedding-v3"
+    embedding_dim: int =1024
+
+    chunk_size: int =500
+    chunk_overlap: int =80
+
+    # 向量路权重；全文路为 1 - 该值（检索 service 使用）
+    hybrid_vector_weight: float =0.7
+
     @property
     # 实现：把 CORS_ORIGINS 拆成 Origin 列表
     def cors_origin_list(self) -> list[str]:
