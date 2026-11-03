@@ -10,6 +10,8 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 import app.models.system  # noqa: F401  副作用：注册 Dept 等模型到 Base.metadata
+import app.models.ai_ext  # noqa: F401  副作用：注册 DocParseTask 等模型到 Base.metadata
+
 from alembic import context
 from app.config import settings
 from app.database import Base
