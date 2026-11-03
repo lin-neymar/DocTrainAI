@@ -18,6 +18,7 @@ from app.api.system.user import router as user_router
 from app.config import settings
 from app.core.handlers import register_exception_handlers
 from app.core.response import success
+from app.api.ai_ext.parse_task import router as parse_task_router
 
 app = FastAPI(title="DocTrainAI", version="0.1.0")
 # 先注册异常处理，再挂路由，保证所有 endpoint 都走统一 { code, message, data }
@@ -42,6 +43,7 @@ app.include_router(user_router, prefix="/api/v1")
 app.include_router(role_router, prefix="/api/v1")
 app.include_router(doc_router, prefix="/api/v1")
 app.include_router(course_router, prefix="/api/v1")
+app.include_router(parse_task_router, prefix="/api/v1")
 
 
 
