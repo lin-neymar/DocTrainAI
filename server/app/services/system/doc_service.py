@@ -7,23 +7,41 @@
 
 from __future__ import annotations
 
-import logging
-import uuid
-from pathlib import Path
+import logging  # 日志模块
+import uuid  # UUID转换
+from collections.abc import Callable  # 类型提示：可调用对象
+from pathlib import Path  # 路径操作
 
-from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import delete, func, select  # SQL操作
+from sqlalchemy.orm import Session  # 数据库会话
 
-from app.core.exceptions import NotFoundError, ValidationFailedError
-from app.models.system.dept import Dept
-from app.models.system.doc import Doc, DocAudienceDept
-from app.services.system import scope_service
-from app.storage import get_storage
-from app.utils import files as file_utils
-from app.utils.office_preview import OFFICE_EXTENSIONS, convert_office_to_pdf
-from app.utils.pagination import page_offset
+from app.core.exceptions import NotFoundError, ValidationFailedError  # 异常
+from app.models.system.dept import Dept  # 部门模型
+from app.models.system.doc import Doc, DocAudienceDept  # 文档模型
+from app.services.system import scope_service  # 范围服务
+from app.storage import get_storage  # 存储服务
+from app.utils import files as file_utils  # 文件工具
+from app.utils.office_preview import OFFICE_EXTENSIONS, convert_office_to_pdf  # Office预览
+from app.utils.pagination import page_offset  # 分页工具
 
 logger = logging.getLogger(__name__)
+
+# 实现：文档创建后的扩展回调列表（ai_ext 等在应用启动时注册；system 不导入 ai_ext）
+_doc_created_hooks: list[Callable[[Session, Doc], None]] = []
+
+
+# 实现：注册文档创建回调（如 ai_ext 自动创建解析任务）
+def register_doc_created_hook(hook: Callable[[Session, Doc], None]) -> None:
+    _doc_created_hooks.append(hook)
+
+
+# 实现：触发文档创建回调；单个回调异常只记日志，不阻断上传主流程
+def _notify_doc_created(session: Session, doc: Doc) -> None:
+    for hook in _doc_created_hooks:
+        try:
+            hook(session, doc)
+        except Exception as exc:  # noqa: BLE001 — 扩展失败不阻断上传
+            logger.warning("doc created hook failed doc=%s: %s", doc.id, exc)
 
 
 # 实现：读取文档 audience 部门 id 列表
@@ -249,6 +267,9 @@ def create_doc(
         except Exception as exc:  # noqa: BLE001 — 预览失败不阻断上传
             logger.warning("office preview after upload failed doc=%s: %s", doc.id, exc)
             session.refresh(doc)
+    
+    # 通知扩展（如 ai_ext 自动创建解析任务）；回调异常不影响上传
+    _notify_doc_created(session, doc)
 
     return _to_dict(session, doc)
 

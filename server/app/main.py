@@ -19,10 +19,14 @@ from app.api.system.user import router as user_router
 from app.config import settings
 from app.core.handlers import register_exception_handlers
 from app.core.response import success
+from app.services.ai_ext.integration import register_ai_ext_hooks
 
 app = FastAPI(title="DocTrainAI", version="0.1.0")
 # 先注册异常处理，再挂路由，保证所有 endpoint 都走统一 { code, message, data }
 register_exception_handlers(app)
+
+# 装配 ai_ext 与底座事件的联动（上传后自动解析）；仅 API 进程执行
+register_ai_ext_hooks()
 
 # D-C：浏览器从 Vite 等「不同 Origin」访问 API 时，必须显式允许，否则预检/响应会被拦。
 # allow_credentials=True：以后若前端带 Cookie 或部分跨域场景需要；当前 JWT 在 Authorization 头里。
