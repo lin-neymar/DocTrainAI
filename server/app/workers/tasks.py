@@ -1,19 +1,21 @@
 """ARQ 任务函数。S3：只推进解析任务状态机；S4 再接真实解析。"""
 from __future__ import annotations  # 开启延迟类型注解
 
-import app.models.system  # noqa: F401  — Worker 进程需注册 doc 等表，解析 FK
-import app.models.ai_ext  # noqa: F401  — 注册 doc_parse_task / doc_chunk
-
 import logging  # 日志模块
-import uuid     # UUID转换
+import uuid  # UUID转换
 
+import app.models.ai_ext  # noqa: F401  — 注册 doc_parse_task / doc_chunk
+import app.models.system  # noqa: F401  — Worker 进程需注册 doc 等表，解析 FK
 from app.database import SessionLocal  # 数据库会话工厂
 from app.models.ai_ext.parse_task import (
-    PARSE_STATUS_FAILED,    # 任务失败状态
-    PARSE_STATUS_RUNNING,   # 任务运行中状态
-    PARSE_STATUS_SUCCEEDED, # 任务成功状态
-    DocParseTask,           # 解析任务ORM模型
+    PARSE_STATUS_FAILED,  # 任务失败状态
+    PARSE_STATUS_RUNNING,  # 任务运行中状态
+    PARSE_STATUS_SUCCEEDED,  # 任务成功状态
+    DocParseTask,  # 解析任务ORM模型
 )
+
+# ----- S4：真实解析流水线 —— 读原件 → 切分 → Embedding → jieba/tsvector 写入 -----
+from app.services.ai_ext.parse_pipeline import ingest_document
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +34,15 @@ async def parse_document(ctx: dict, task_id: str) -> None:
         task.error_summary = None
         session.commit()
 
-        # ----- S4 将在这里：读 storage_key → Loader → 切分 → Embedding → 写 chunk -----
-        # S3 仅验证队列与状态机，无真实文档解析逻辑
-        task.status = PARSE_STATUS_SUCCEEDED  # 直接标记成功（占位）
+        # S4：真实解析流水线 —— 读原件 → 切分 → Embedding → jieba/tsvector 写入
+        chunk_count = ingest_document(session, doc_id=task.doc_id)
+
+        task.status = PARSE_STATUS_SUCCEEDED
         session.commit()
-        logger.info("parse task succeeded (placeholder): %s", task_id)
+        logger.info(
+            "parse task succeeded: task=%s doc=%s chunks=%d",
+            task_id, task.doc_id, chunk_count,
+        )
     except Exception as exc:  # noqa: BLE001 — Worker 边界：记入任务失败摘要
         session.rollback()  # 异常回滚事务
         task = session.get(DocParseTask, tid)

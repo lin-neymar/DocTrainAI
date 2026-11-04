@@ -20,3 +20,7 @@ jieba                  # 中文分词 → 写入 tsvector(simple)
 langchain-core         # Document 等核心类型
 langchain-text-splitters  # RecursiveCharacterTextSplitter
 langchain-openai       # OpenAI 兼容 Embeddings（通义等）
+pypdf          # pdf 解析
+python-docx    # docx 解析
+openpyxl       # xlsx 解析
+python-pptx    # pptx 解析
