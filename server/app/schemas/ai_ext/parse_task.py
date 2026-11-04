@@ -1,9 +1,10 @@
 """解析任务出入参。"""
 
 from datetime import datetime  # 日期时间类型
-from uuid import UUID          # UUID类型注解
+from uuid import UUID  # UUID类型注解
 
 from pydantic import BaseModel  # Pydantic基础模型、字段描述/校验
+
 
 # 创建解析任务请求体Schema
 class ParseTaskCreate(BaseModel):

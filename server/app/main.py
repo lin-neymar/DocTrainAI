@@ -7,6 +7,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.ai_ext.parse_task import router as parse_task_router
 from app.api.health import router as health_router
 from app.api.system.auth import router as auth_router
 from app.api.system.course import router as course_router
@@ -18,7 +19,6 @@ from app.api.system.user import router as user_router
 from app.config import settings
 from app.core.handlers import register_exception_handlers
 from app.core.response import success
-from app.api.ai_ext.parse_task import router as parse_task_router
 
 app = FastAPI(title="DocTrainAI", version="0.1.0")
 # 先注册异常处理，再挂路由，保证所有 endpoint 都走统一 { code, message, data }

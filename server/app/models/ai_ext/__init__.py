@@ -7,7 +7,6 @@ Alembic 需 import 本包，模型才会进入 Base.metadata。
 from app.models.ai_ext.chunk import DocChunk
 from app.models.ai_ext.parse_task import DocParseTask
 
-
 __all__ = [
     "DocChunk",
     "DocParseTask",

@@ -10,11 +10,12 @@ from sqlalchemy.orm import Session  # 数据库会话
 from app.core.exceptions import NotFoundError  # 自定义资源不存在异常
 from app.models.ai_ext.parse_task import (
     PARSE_STATUS_PENDING,  # 任务待处理状态常量
-    DocParseTask           # 文档解析任务模型
+    DocParseTask,  # 文档解析任务模型
 )
 from app.models.system.doc import Doc  # 文档主表模型
 from app.services.ai_ext.queue import enqueue_parse_document  # ARQ任务入队方法
 from app.services.system.scope_service import get_visible_doc_ids  # 获取当前用户有权限查看的文档ID
+
 
 # 辅助函数：检查文档可见性
 def _require_visible_doc(

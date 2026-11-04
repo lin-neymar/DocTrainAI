@@ -3,15 +3,15 @@
 from __future__ import annotations  # 开启延迟类型注解，支持模型互相引用
 
 from typing import Annotated  # 类型注解增强，配合Depends使用
-from uuid import UUID         # UUID类型
+from uuid import UUID  # UUID类型
 
 from fastapi import APIRouter, Depends  # 路由对象、依赖注入
-from sqlalchemy.orm import Session      # 数据库会话
+from sqlalchemy.orm import Session  # 数据库会话
 
 from app.core.deps import require_permission  # 权限校验依赖
-from app.core.response import success         # 统一成功返回包装器
-from app.database import get_db               # 获取数据库会话依赖
-from app.models.system.user import User       # 用户ORM模型
+from app.core.response import success  # 统一成功返回包装器
+from app.database import get_db  # 获取数据库会话依赖
+from app.models.system.user import User  # 用户ORM模型
 from app.schemas.ai_ext.parse_task import ParseTaskCreate, ParseTaskOut  # 任务入参、出参Schema
 from app.services.ai_ext import parse_task_service  # 解析任务业务服务
 
@@ -26,7 +26,9 @@ router = APIRouter(prefix="/parse-tasks", tags=["parse-tasks"])
 # 创建解析任务并入队
 def create_parse_task(
     body: ParseTaskCreate,  # 请求体：待解析文档ID
-    current_user: Annotated[User, Depends(require_permission("doc:read"))], # 当前用户，校验doc:read权限
+    current_user: Annotated[
+        User, Depends(require_permission("doc:read"))
+    ], # 当前用户，校验doc:read权限
     db: Annotated[Session, Depends(get_db)], # 数据库会话
 ) -> dict:
     # 调用业务服务，创建任务并推入ARQ队列

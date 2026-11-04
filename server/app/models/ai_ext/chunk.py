@@ -9,11 +9,12 @@ from typing import Any  # 任意类型注解
 
 from pgvector.sqlalchemy import Vector  # pgvector向量字段，存储embedding
 from sqlalchemy import DateTime, ForeignKey, Integer, Text, func  # 基础字段与数据库函数
-from sqlalchemy.dialects.postgresql import UUID, JSONB, TSVECTOR  # Postgres专属扩展类型
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID  # Postgres专属扩展类型
 from sqlalchemy.orm import Mapped, mapped_column  # SQLAlchemy2.0 ORM映射注解
 
 from app.config import settings  # 全局配置
 from app.database import Base  # ORM基类，所有模型继承它
+
 
 class DocChunk(Base):
     __tablename__ = "doc_chunk"
