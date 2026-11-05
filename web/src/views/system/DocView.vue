@@ -22,6 +22,8 @@ import {
   ElPagination,
   ElTable,
   ElTableColumn,
+  ElTag,
+  ElTooltip,
   ElTree,
   ElTreeSelect,
   ElUpload,
@@ -38,6 +40,7 @@ import {
   uploadDocApi,
   type DocItem,
 } from '@/api/system/doc'
+import { fetchLatestParseTaskApi, type ParseTask } from '@/api/ai_ext/parseTask'
 import { audienceTreeForOwner, canCustomizeAudience, collectSubtreeIds } from '@/utils/audience'
 import { formatDateTime } from '@/utils/datetime'
 import { hasPermission } from '@/utils/permission'
@@ -54,6 +57,9 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const tableRef = ref<TableInstance>()
+/** 解析状态：doc_id → 最新解析任务（从未解析过为 null） */
+const parseStatusMap = ref<Record<string, ParseTask | null>>({})
+let pollTimer: ReturnType<typeof setInterval> | null = null
 const selectedDocs = ref<DocItem[]>([])
 const filterTitle = ref('')
 const appliedTitle = ref('')
@@ -221,6 +227,64 @@ async function loadDocs() {
   } finally {
     loading.value = false
   }
+  // 解析状态：重建映射并拉取当前页状态（内部按需启动轮询）
+  parseStatusMap.value = {}
+  await loadParseStatuses()
+}
+
+// 实现：是否存在未完成的解析任务（pending/running）
+function hasActiveTasks(): boolean {
+  return Object.values(parseStatusMap.value).some(
+    (t) => !!t && (t.status === 'pending' || t.status === 'running'),
+  )
+}
+
+// 实现：拉取当前页每篇文档的最新解析任务（失败静默，不打断列表）
+async function loadParseStatuses() {
+  const ids = docs.value.map((d) => d.id)
+  if (!ids.length) return
+  const results = await Promise.allSettled(ids.map((id) => fetchLatestParseTaskApi(id)))
+  ids.forEach((id, index) => {
+    const r = results[index]
+    if (r && r.status === 'fulfilled') parseStatusMap.value[id] = r.value
+  })
+  if (hasActiveTasks()) startPolling()
+  else stopPolling()
+}
+
+// 实现：只刷新 pending/running 的文档，终态不重复请求
+async function refreshActiveStatuses() {
+  const ids = docs.value
+    .filter((d) => {
+      const t = parseStatusMap.value[d.id]
+      return !!t && (t.status === 'pending' || t.status === 'running')
+    })
+    .map((d) => d.id)
+  if (!ids.length) {
+    stopPolling()
+    return
+  }
+  const results = await Promise.allSettled(ids.map((id) => fetchLatestParseTaskApi(id)))
+  ids.forEach((id, index) => {
+    const r = results[index]
+    if (r && r.status === 'fulfilled') parseStatusMap.value[id] = r.value
+  })
+  if (!hasActiveTasks()) stopPolling()
+}
+
+// 实现：存在未完成任务时每 5 秒轮询，全部到达终态自动停止
+function startPolling() {
+  if (pollTimer) return
+  pollTimer = setInterval(() => {
+    void refreshActiveStatuses()
+  }, 5000)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
 }
 
 function onSelectionChange(rows: DocItem[]) {
@@ -255,6 +319,18 @@ function audienceLabel(row: unknown) {
   const ids = asDoc(row).audience_dept_ids ?? []
   if (!ids.length) return '—'
   return ids.map((id) => deptNameMap.value[id] || id.slice(0, 8)).join('、')
+}
+
+function taskOf(row: unknown): ParseTask | null | undefined {
+  return parseStatusMap.value[asDoc(row).id]
+}
+
+function statusOf(row: unknown): string | undefined {
+  return taskOf(row)?.status
+}
+
+function errorOf(row: unknown): string {
+  return taskOf(row)?.error_summary || ''
 }
 
 function formatSize(bytes: number) {
@@ -519,6 +595,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   revokePreviewUrl()
+  // 解析状态：组件卸载时停止轮询，避免定时器泄漏
+  stopPolling()
 })
 </script>
 
@@ -587,6 +665,18 @@ onUnmounted(() => {
           <ElTableColumn label="上传时间" min-width="170">
             <template #default="{ row }">
               {{ formatDateTime(asDoc(row).created_at) }}
+            </template>
+          </ElTableColumn>
+          <!-- 解析状态：failed 悬停显示失败原因；从未解析过显示未解析 -->
+          <ElTableColumn label="解析状态" width="120">
+            <template #default="{ row }">
+              <ElTooltip v-if="statusOf(row) === 'failed'" :content="errorOf(row)" placement="top">
+                <ElTag type="danger">解析失败</ElTag>
+              </ElTooltip>
+              <ElTag v-else-if="statusOf(row) === 'succeeded'" type="success">已解析</ElTag>
+              <ElTag v-else-if="statusOf(row) === 'running'" type="warning">解析中</ElTag>
+              <ElTag v-else-if="statusOf(row) === 'pending'" type="info">待解析</ElTag>
+              <ElTag v-else type="info">未解析</ElTag>
             </template>
           </ElTableColumn>
           <ElTableColumn label="操作" width="260" fixed="right">
