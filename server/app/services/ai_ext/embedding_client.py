@@ -22,14 +22,24 @@ def get_embeddings()->OpenAIEmbeddings:
     )
 
 # 批量嵌入文本
-def embed_texts(texts: list[str])->list[list[float]]:
+# DashScope text-embedding-v3 单次请求最多接受 10 条文本
+EMBED_BATCH_SIZE = 10
+
+
+# 批量嵌入文本：按 EMBED_BATCH_SIZE 分批调用，避免超过服务端 batch 上限
+def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
-    # embed_documents 方法：把文本列表批量转换为向量列表
-    vectors = get_embeddings().embed_documents(texts)
+    vectors: list[list[float]] = []
+    for start in range(0, len(texts), EMBED_BATCH_SIZE):
+        batch = texts[start : start + EMBED_BATCH_SIZE]
+        # embed_documents 方法：把一批文本批量转换为向量列表
+        vectors.extend(get_embeddings().embed_documents(batch))
+
+    # 合并后统一做维度校验，防御逻辑保持一处
     dim = settings.embedding_dim
-    for i,vec in enumerate(vectors):
+    for i, vec in enumerate(vectors):
         if len(vec) != dim:
-            raise RuntimeError(f"向量纬度{len(vec)} 与 EMBEDDING_DIM={dim} 不一致 (第 {i} 条)")
+            raise RuntimeError(f"向量维度 {len(vec)} 与 EMBEDDING_DIM={dim} 不一致 (第 {i} 条)")
     return vectors
     
