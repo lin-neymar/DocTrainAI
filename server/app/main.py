@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.ai_ext.parse_task import router as parse_task_router
+from app.api.ai_ext.retrieval import router as retrieval_router
 from app.api.health import router as health_router
 from app.api.system.auth import router as auth_router
 from app.api.system.course import router as course_router
@@ -48,6 +49,7 @@ app.include_router(role_router, prefix="/api/v1")
 app.include_router(doc_router, prefix="/api/v1")
 app.include_router(course_router, prefix="/api/v1")
 app.include_router(parse_task_router, prefix="/api/v1")
+app.include_router(retrieval_router, prefix="/api/v1")
 
 
 

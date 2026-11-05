@@ -17,6 +17,7 @@ from app.services.ai_ext.loaders import load_documents  # 文件解析器，byte
 from app.storage import get_storage  # 获取文件存储实例
 
 
+# 解析并重建分片
 def ingest_document(session: Session, doc_id: uuid.UUID) -> int:
     """解析指定文档并重建分片。返回写入的 chunk 数量。
     调用方负责外层事务/任务状态；本函数会 delete 旧 chunk 并 add 新行。
