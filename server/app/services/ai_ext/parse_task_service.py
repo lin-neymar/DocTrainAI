@@ -30,22 +30,6 @@ def _require_visible_doc(
         raise NotFoundError("文档不存在")
     return doc
 
-# 创建解析任务并入队
-# def create_and_enqueue(
-#     session:Session, *, user_id:uuid.UUID, doc_id:uuid.UUID
-# )-> DocParseTask:
-#     """创建 pending 任务并入队。需要调用方已具备 doc:read（路由层校验）。"""
-#     _require_visible_doc(session,user_id=user_id,doc_id=doc_id)
-
-#     task = DocParseTask(doc_id=doc_id,status=PARSE_STATUS_PENDING)
-#     session.add(task)
-#     session.commit()
-#     session.refresh(task)
-
-#     # 先落库再入队，避免 worker 找不到 task 行
-#     enqueue_parse_document(task.id)
-#     return task
-# 替换成如下三个函数：
 # 实现：核心流程——建 pending 任务落库后入队；入队失败回标 failed 并抛出
 def _create_and_enqueue(session: Session, *, doc_id: uuid.UUID) -> DocParseTask:
     task = DocParseTask(doc_id=doc_id, status=PARSE_STATUS_PENDING)

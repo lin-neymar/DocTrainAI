@@ -21,7 +21,7 @@ router = APIRouter(prefix="/parse-tasks", tags=["parse-tasks"])
 @router.post(
     "",
     summary="创建解析任务并入队",
-    description="对可见文档入队异步解析。需要 doc:read。S3 仅状态机占位。",
+    description="对可见文档入队异步解析。需要 doc:read。",
 )
 # 创建解析任务并入队
 def create_parse_task(
