@@ -85,11 +85,15 @@ def _generate_node(state: AgentState) -> dict:
     messages = _build_messages(state)
     answer = stream_answer(messages, state.get("on_token"))
     if state["intent"] == INTENT_RETRIEVAL:
-        citations = _build_citations(state["chunks"])
+        citations = _build_citations(state.get("chunks") or [])
     else:
         citations = []
-        return {"answer": answer, "citations": citations, "chunk_ids": []}
-    return {"answer": answer, "citations": citations}
+    return {
+        "answer": answer,
+        "citations": citations,
+        "chunk_ids": state.get("chunk_ids") or [],
+        "refused": False,
+    }
 
 
 # 实现：拒答节点——固定文案，不调用对话模型
@@ -123,11 +127,12 @@ def _build_messages(state: AgentState) -> list[BaseMessage]:
 
 # 实现：人类消息 = 问题 + 引用区块；无引用时不附区块（闲聊）
 def _build_question(state: AgentState) -> str:
-    if not state["chunks"]:
+    chunks = state.get("chunks") or []
+    if not chunks:
         return state["question"]
     lines = [
         f"[{i}] 《{chunk['doc_title']}》 {chunk['content']}"
-        for i, chunk in enumerate(state["chunks"], start=1)
+        for i, chunk in enumerate(chunks, start=1)
     ]
     return f"{state['question']}\n\n{REFERENCE_HEADER}" + "\n".join(lines)
 

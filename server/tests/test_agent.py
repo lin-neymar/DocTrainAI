@@ -7,6 +7,9 @@
 - 引用结构固定五字段。
 """
 
+import uuid
+from types import SimpleNamespace
+
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.config import settings
@@ -52,12 +55,22 @@ def _patch_intent_and_search(monkeypatch, intent: str, chunks: list[dict] | None
         )
 
 
+# 实现：运行入口的便捷封装——检索路径需要非空 session/user_id
+def _run(question: str, history: list[dict] | None = None) -> dict:
+    return run_agent(
+        SimpleNamespace(),
+        user_id=uuid.uuid4(),
+        question=question,
+        history=history or [],
+    )
+
+
 def test_retrieval_intent_generates_with_citations(monkeypatch) -> None:
     """需检索问题：走检索、生成，引用结构固定五字段。"""
     _patch_intent_and_search(monkeypatch, "retrieval", [_chunk()])
-    captured = _install_fake_stream(monkeypatch)
+    _install_fake_stream(monkeypatch)
 
-    result = run_agent(None, user_id=None, question="年假有几天？", history=[])
+    result = _run("年假有几天？")
 
     assert result["refused"] is False
     assert result["answer"] == "收到。"
@@ -81,7 +94,7 @@ def test_chit_chat_skips_retrieval_and_citations(monkeypatch) -> None:
     monkeypatch.setattr(agent_graph, "search_chunks", explode)
     captured = _install_fake_stream(monkeypatch, answer="今天也要加油呀。")
 
-    result = run_agent(None, user_id=None, question="今天天气怎么样？", history=[])
+    result = _run("今天天气怎么样？")
 
     assert result["refused"] is False
     assert result["answer"] == "今天也要加油呀。"
@@ -99,7 +112,7 @@ def test_refuse_intent_returns_abstain_message(monkeypatch) -> None:
 
     monkeypatch.setattr(agent_graph, "stream_answer", explode)
 
-    result = run_agent(None, user_id=None, question="怎么制作违禁品？", history=[])
+    result = _run("怎么制作违禁品？")
 
     assert result["refused"] is True
     assert result["answer"] == settings.abstain_message
@@ -115,7 +128,7 @@ def test_abstain_below_threshold_skips_generation(monkeypatch) -> None:
 
     monkeypatch.setattr(agent_graph, "stream_answer", explode)
 
-    result = run_agent(None, user_id=None, question="外星人入侵怎么办？", history=[])
+    result = _run("外星人入侵怎么办？")
 
     assert result["refused"] is True
     assert result["answer"] == settings.abstain_message
@@ -128,7 +141,7 @@ def test_generates_when_score_above_threshold(monkeypatch) -> None:
     _patch_intent_and_search(monkeypatch, "retrieval", [_chunk(score=0.9)])
     captured = _install_fake_stream(monkeypatch)
 
-    result = run_agent(None, user_id=None, question="年假有几天？", history=[])
+    result = _run("年假有几天？")
 
     assert result["refused"] is False
     assert captured["messages"] is not None
@@ -140,7 +153,7 @@ def test_hostile_reference_stays_non_executable(monkeypatch) -> None:
     _patch_intent_and_search(monkeypatch, "retrieval", [_chunk(content=hostile, score=0.9)])
     captured = _install_fake_stream(monkeypatch)
 
-    result = run_agent(None, user_id=None, question="年假有几天？", history=[])
+    result = _run("年假有几天？")
 
     messages = captured["messages"]
     assert isinstance(messages[0], SystemMessage)
@@ -157,10 +170,8 @@ def test_history_is_injected_as_messages(monkeypatch) -> None:
     monkeypatch.setattr(agent_graph, "classify_intent", lambda q: "chit_chat")
     captured = _install_fake_stream(monkeypatch)
 
-    run_agent(
-        None,
-        user_id=None,
-        question="继续聊。",
+    _run(
+        "继续聊。",
         history=[
             {"role": "user", "content": "你好"},
             {"role": "assistant", "content": "你好，有什么可以帮你？"},
