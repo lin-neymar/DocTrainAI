@@ -1,10 +1,12 @@
 # WEB_SPEC.md
+
 > 前端编码规约。本文包含后续阶段页面，便于界面和接口一次对齐。
 > 未在 AI_ONBOARD.md 开放的阶段，禁止实现对应页面、store 和接口封装。
 
 技术栈：Vue3、Vite、Element Plus、Pinia、Axios。界面语言为简体中文。
 
 ## 📁 src 目录
+
 ```
 src/
 ├── api/
@@ -33,11 +35,13 @@ src/
 阶段 1 不创建 `ai_ext` 的路由、页面和组件。可以先留出空目录，也可以到阶段 2 再创建。两种做法以「里面没有业务代码」为准。
 
 ## 依赖白名单
+
 阶段 1：vue、vue-router、pinia、element-plus、axios、vite、eslint、prettier、typescript、vue-tsc，以及它们的官方配套插件。
 
 阶段 3 的流式请求使用浏览器原生流，不额外引入 SSE 框架。白名单外的包先确认。
 
 ## 🔴 MUST
+
 1. 用户资料和权限码只放在 `user` 这个 Pinia store。刷新后用 Access Token 调用 `/auth/me` 恢复。localStorage **默认只持久化 token**；允许额外持久化**当前用户个人主题色**（T1）以便首屏闪色处理，但不得持久化权限码、用户资料或业务列表。
 2. 功能显隐只有 `hasPermission(permCode)`。它只查询 store 里的权限码。禁止 `role === 'admin'`、禁止比较角色中文名或角色 code。
 3. 菜单来自前端静态路由。路由写 `meta.permission`，守卫和侧边栏都调用 `hasPermission`。不建菜单表，也不请求菜单接口。无 `meta.permission` 的项表示「已登录即可」（若该页仍需要，须在规约中写明；当前仅工作台等例外需谨慎新增）。
@@ -55,15 +59,23 @@ src/
 12. **文档预览**：文档列表提供「查看」。调用预览接口（鉴权代下 blob）；pdf 用页内嵌入预览；md 用文本展示（阶段 1 不强制引入 markdown 渲染库）；office 预览流为 PDF，同样嵌入。关闭预览须释放对象 URL。阶段 1 不展示解析状态。
 
 ## 阶段页面
+
 阶段 1：登录、工作台、部门树、用户、角色权限、文档上传与列表（含归属与可见组织、标题搜索、批量删除、查看预览；部门管理员无可见勾选；允许 pdf/md/docx/xlsx/pptx）、课程及挂接文档（含标题搜索、批量删除）、系统设置（已登录可进：T1 人人可改；T2～T4 按码显隐）。文档列表不展示解析状态。
 
 阶段 2：在现有文档列表增加解析状态。不新增知识库页面。
 
 阶段 3：对话页放在 `views/ai_ext`。消息流式追加。引用卡片展示文档标题、位置和片段。拒答作为一条明确的助手消息展示。没有 `agent:chat` 的用户看不到对话入口。
 
+- 路由注册在 `routes/ai_ext`，`meta.permission: 'agent:chat'`；侧边栏菜单项按 `hasPermission('agent:chat')` 显隐，禁止比较角色 code。
+- 页面分会话区与消息区：会话区用 `GET /chat/sessions`（统一分页结构）列出当前用户会话，支持新建与切换；消息区渲染历史（`GET /chat/sessions/{id}/messages`），发送后流式追加。
+- 引用卡片（`components/ai_ext`）展示 `doc_title`、`location`（md 标题 / pdf 页码 / office 位置的可读文案）、`snippet`。`refused` 的助手消息用明确样式（提示图标 + 文案）与普通回答区分。
+- 流式期间：`citation` 先建引用卡片骨架，`delta` 逐段追加，`done` 收尾拿到 message_id，`error` 展示错误并允许重试；发送中禁止再次发送。
+- 接口函数全部放 `src/api`（`api/ai_ext/chat.ts`）；SSE 读取统一走 `utils/sse.ts`，组件只消费已经解析好的 `delta`、`citation`、`done`、`error` 四种事件。
+
 SSE 的读取放在 `utils/sse.ts`。组件只消费已经解析好的 `delta`、`citation`、`done`、`error`。
 
 ## 🟡 SHOULD
+
 1. 表格、确认弹窗和分页工具抽成 `components/common`，相同交互不各写一遍。
 2. 接口函数全部放在 `src/api`。组件不直接创建 Axios 请求。
 3. 保存前运行 Prettier 和 ESLint；改动后跑 typecheck。
@@ -71,6 +83,7 @@ SSE 的读取放在 `utils/sse.ts`。组件只消费已经解析好的 `delta`�
 5. 管理台保持浅色侧栏；主色由 T1 个人主题驱动，默认 `#1F4B7A`。
 
 ## ⚫ MUST NOT
+
 1. 禁止在前端保存或判断数据范围，也禁止用前端过滤代替文档可见性。
 2. 禁止把接口根地址、密钥、模型名写进源码。接口根地址来自 Vite 环境变量。
 3. 禁止把用户信息、权限码、文档内容长期放进 localStorage 或 sessionStorage（个人主题色除外）。
@@ -79,15 +92,15 @@ SSE 的读取放在 `utils/sse.ts`。组件只消费已经解析好的 `delta`�
 6. 禁止在系统设置页提供 JWT、CORS、数据库、上传大小白名单等部署项编辑。
 
 ## 阶段 1 路由权限
-| 页面 | meta.permission / 按钮码 |
-|---|---|
-| 工作台 | 已登录即可（无 meta.permission） |
-| 部门管理 | `dept:read`；写按钮 `dept:create` / `dept:update` / `dept:delete`；根部门写另需后端校验 `data:scope:all` |
-| 用户管理 | `user:read`；写按钮对应 `user:create` 等；重置密码 `user:reset_password`；角色勾选依赖 `role:read`；有 `user:delete` 时表格多选 + 批量删除（当前页） |
-| 角色管理 | `role:assign_perm`（仅配置权限与角色维护入口）；无此码不进菜单。`role:read` 供其他页拉列表 |
-| 文档管理 | `doc:read`；上传 `doc:create`；编辑 `doc:update`；删除 `doc:delete`；查看预览（`doc:read`）；标题搜索；有 `doc:delete` 时多选批量删 |
-| 课程管理 | `course:read`；创建/编辑 `course:create`/`course:update`；删除 `course:delete`；挂接 `course:attach_doc`；标题搜索；有 `course:delete` 时多选批量删 |
-| 系统设置 | 已登录即可（无 `meta.permission`）；页内品牌区 `system:read` / `system:update` |
-| 个人主题 T1 | 无独立路由权限；设置页内已登录可改 |
 
-对话页在阶段 3 使用 `agent:chat`。
+| 页面        | meta.permission / 按钮码                                                                                                                             |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 工作台      | 已登录即可（无 meta.permission）                                                                                                                     |
+| 部门管理    | `dept:read`；写按钮 `dept:create` / `dept:update` / `dept:delete`；根部门写另需后端校验 `data:scope:all`                                             |
+| 用户管理    | `user:read`；写按钮对应 `user:create` 等；重置密码 `user:reset_password`；角色勾选依赖 `role:read`；有 `user:delete` 时表格多选 + 批量删除（当前页） |
+| 角色管理    | `role:assign_perm`（仅配置权限与角色维护入口）；无此码不进菜单。`role:read` 供其他页拉列表                                                           |
+| 文档管理    | `doc:read`；上传 `doc:create`；编辑 `doc:update`；删除 `doc:delete`；查看预览（`doc:read`）；标题搜索；有 `doc:delete` 时多选批量删                  |
+| 课程管理    | `course:read`；创建/编辑 `course:create`/`course:update`；删除 `course:delete`；挂接 `course:attach_doc`；标题搜索；有 `course:delete` 时多选批量删  |
+| 系统设置    | 已登录即可（无 `meta.permission`）；页内品牌区 `system:read` / `system:update`                                                                       |
+| 个人主题 T1 | 无独立路由权限；设置页内已登录可改                                                                                                                   |
+| 对话        | `agent:chat`（阶段 3）；无此码不显示菜单入口                                                                                                         |
