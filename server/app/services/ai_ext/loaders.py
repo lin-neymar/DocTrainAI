@@ -1,9 +1,13 @@
 """按扩展名把文件二进制字节流解析为 LangChain Document 文档列表。"""
 from __future__ import annotations  # 延迟类型注解，支持模型前向引用
 
+import re  # 标题行识别
 from io import BytesIO  # 内存字节流，不用落盘文件直接读取bytes
 
 from langchain_core.documents import Document  # LangChain文档对象，承载文本+元数据
+
+# ATX 标题：1–6 级井号；_setext_ 下划线式标题少见，不支持
+_ATX_HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 
 
 def load_documents(content: bytes, extension: str) -> list[Document]:
@@ -26,9 +30,40 @@ def load_documents(content: bytes, extension: str) -> list[Document]:
 
 
 def _load_md(content: bytes) -> list[Document]:
-    """解析 Markdown：二进制转utf8文本，返回单个Document"""
+    """解析 Markdown：按 ATX 标题切段，每段一个 Document。
+
+    段内元数据记录最近一个标题（去井号后的纯文本），供分片 location 使用；
+    首个标题前的引言/前言段不写 heading。围栏代码块（``` / ~~~）内的井号
+    不视为标题。无标题文档退化为单篇整体。后续字符切分继承段元数据。
+    """
     text = content.decode("utf-8")
-    return [Document(page_content=text, metadata={"ext": "md"})]
+    lines = text.splitlines(keepends=True)
+    docs: list[Document] = []
+    buf: list[str] = []
+    heading = ""
+    in_fence = False
+
+    def flush() -> None:
+        # 空段（只有空白）不入列表，避免产出无效 Document
+        if "".join(buf).strip():
+            meta = {"ext": "md"}
+            if heading:
+                meta["heading"] = heading
+            docs.append(Document(page_content="".join(buf), metadata=meta))
+
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith(("```", "~~~")):
+            in_fence = not in_fence  # 围栏开/关切换
+        matched = None if in_fence else _ATX_HEADING.match(line)
+        if matched:
+            flush()
+            buf = [line]  # 标题行留在段首，命中文本自带章节上下文
+            heading = matched.group(2)
+        else:
+            buf.append(line)
+    flush()
+    return docs or [Document(page_content=text, metadata={"ext": "md"})]
 
 
 def _load_pdf(content: bytes) -> list[Document]:
