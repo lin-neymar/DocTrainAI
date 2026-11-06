@@ -24,3 +24,5 @@ pypdf          # pdf 解析
 python-docx    # docx 解析
 openpyxl       # xlsx 解析
 python-pptx    # pptx 解析
+# ---------- 阶段 3：LangGraph 单 Agent ----------
+langgraph      # 对话 Agent 编排（SERVER_SPEC 白名单）

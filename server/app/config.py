@@ -72,6 +72,21 @@ class Settings(BaseSettings):
     # 解析任务失败后的重试次数（不含首次执行）；次数耗尽才落 failed
     parse_max_retry: int = 2
 
+    # ---------- 阶段 3：智能对话（与 Embedding 配置分开） ----------
+    # 对话模型兼容接口；未配置时对话接口返回明确错误
+    chat_base_url: str = ""
+    chat_api_key: str = ""
+    # 模型名允许配置默认值，可被环境变量覆盖（PROJECT_SPEC MUST NOT 3）
+    chat_model: str = "qwen-plus"
+
+    # 对话检索片段条数（复用阶段 2 两路检索）
+    retrieval_top_k: int = 5
+    # 合并后最高分低于该阈值时拒答：不调用对话模型，返回固定文案
+    abstain_score_threshold: float = 0.35
+    abstain_message: str = "抱歉，我无法从现有资料中找到足够的相关信息来回答这个问题。"
+    # 带入模型的历史消息条数（最近 N 条）
+    memory_turns_messages: int = 6
+
     @property
     # 实现：把 CORS_ORIGINS 拆成 Origin 列表
     def cors_origin_list(self) -> list[str]:
