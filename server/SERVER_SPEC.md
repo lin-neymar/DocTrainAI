@@ -1,4 +1,5 @@
 # SERVER_SPEC.md
+
 > 后端编码规约。本文写明后续阶段的契约，避免阶段切换时改口。
 > 未在 AI_ONBOARD.md 开放的阶段，只可阅读，禁止实现、禁止安装该阶段的依赖。
 
@@ -6,6 +7,7 @@
 普通接口使用同步 `def` 和同步 Session。阶段 3 的 SSE 单独使用流式响应。
 
 ## 📁 目录
+
 ```
 server/
 ├── alembic/
@@ -31,7 +33,7 @@ server/
 │   └── utils/
 ├── scripts/
 │   ├── seed.py                 # 权限码、内置角色、根部门、初始管理员、默认品牌
-│   ├── purge_soft_deleted.py   # 开发库清理软删行（CLI）
+│   ├── purge_dev_data.py       # 开发库业务数据清理，保留 seed 基线（CLI，默认 dry-run）
 │   └── eval_retrieval.py       # 阶段 2+：命令行评估，不是在线服务
 ├── tests/
 ├── requirements.txt
@@ -42,6 +44,7 @@ server/
 ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在路由。
 
 ## 依赖白名单
+
 阶段 1 可以安装：fastapi、uvicorn、sqlalchemy、pydantic-settings、alembic、psycopg、pgvector（仅驱动，阶段 1 不建向量列）、pyjwt、bcrypt、python-multipart、pytest、httpx、ruff。
 
 阶段 1 **办公预览转换**依赖本机/镜像中的 **LibreOffice（或兼容的 soffice）** 命令行，不是 pip 包；缺失时 office 预览失败须有明确错误，且原件下载仍可用。
@@ -53,6 +56,7 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 白名单外的包必须先确认。
 
 ## 🔴 阶段 1 领域模型
+
 单公司部署，表上不设 `tenant_id`。组织默认深度：公司（根）→ 分公司 → 部门。
 
 - 部门：树，`parent_id` 为空表示根。禁止形成环。软删除时若仍有未删除的子部门或用户，返回 409。
@@ -75,40 +79,42 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 课程列表/详情的可见规则与文档同构（需 `course:read` + audience 子树），可抽公共逻辑。函数放在 `services/system`，供阶段 2 检索调用 `get_visible_doc_ids`。
 
 文档/课程写入约束（方案 B）：
+
 - 归属部门必须在操作者 `get_accessible_dept_ids` 内。
 - 每个 audience 节点必须 ⊆ 归属部门子树，且 ∈ 操作者可访问部门。
 - 部门管理员创建/更新时：不接受客户端自定义 audience（或忽略），服务端固定为 `[操作者所在部门]`。
 - 旧数据迁移：audience 初始等于原归属 `dept_id`。
 
 ## 🔴 权限码与种子角色
+
 阶段 1 注册下列权限码（`资源:动作`）。旧码 `user:manage`、`dept:manage`、`role:manage`、`doc:upload`、`course:manage` **停止种子绑定并软删/停用**，不再授予任何内置角色。
 
-| code | 含义 |
-|---|---|
-| `dept:read` | 部门列表/树/详情 |
-| `dept:create` / `dept:update` / `dept:delete` | 部门写 |
-| `user:read` / `user:create` / `user:update` / `user:delete` | 用户读写删 |
-| `user:reset_password` | 重置他人密码 |
-| `role:read` | 角色列表/详情；供用户表单勾选角色 |
-| `role:create` / `role:update` / `role:delete` | 角色写 |
-| `role:assign_perm` | 替换角色权限；`GET /permissions` |
-| `doc:read` / `doc:create` / `doc:update` / `doc:delete` | 文档（create=上传；update=元数据与 audience） |
-| `course:read` / `course:create` / `course:update` / `course:delete` | 课程 |
-| `course:attach_doc` | 挂接文档 |
-| `system:read` | 读取可管理的系统品牌（设置页） |
-| `system:update` | 修改 T2/T3/T4（显示名、副文案、Logo） |
-| `data:scope:all` | 管理范围为全公司；不自动可读全部内容 |
+| code                                                                | 含义                                          |
+| ------------------------------------------------------------------- | --------------------------------------------- |
+| `dept:read`                                                         | 部门列表/树/详情                              |
+| `dept:create` / `dept:update` / `dept:delete`                       | 部门写                                        |
+| `user:read` / `user:create` / `user:update` / `user:delete`         | 用户读写删                                    |
+| `user:reset_password`                                               | 重置他人密码                                  |
+| `role:read`                                                         | 角色列表/详情；供用户表单勾选角色             |
+| `role:create` / `role:update` / `role:delete`                       | 角色写                                        |
+| `role:assign_perm`                                                  | 替换角色权限；`GET /permissions`              |
+| `doc:read` / `doc:create` / `doc:update` / `doc:delete`             | 文档（create=上传；update=元数据与 audience） |
+| `course:read` / `course:create` / `course:update` / `course:delete` | 课程                                          |
+| `course:attach_doc`                                                 | 挂接文档                                      |
+| `system:read`                                                       | 读取可管理的系统品牌（设置页）                |
+| `system:update`                                                     | 修改 T2/T3/T4（显示名、副文案、Logo）         |
+| `data:scope:all`                                                    | 管理范围为全公司；不自动可读全部内容          |
 
 阶段 3 再注册 `agent:chat`。在那之前不种子、不判断这个码。
 
 内置角色的 code 只给种子脚本使用：
 
-| 角色 | code | 权限码 |
-|---|---|---|
-| 超级管理员 | `super_admin` | 阶段 1 全部上表权限码，含 `data:scope:all`、`system:read`、`system:update` |
+| 角色       | code            | 权限码                                                                                                                                                                                                  |
+| ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 超级管理员 | `super_admin`   | 阶段 1 全部上表权限码，含 `data:scope:all`、`system:read`、`system:update`                                                                                                                              |
 | 公司管理员 | `company_admin` | `dept:*`（含 read）、`user:*`、`user:reset_password`、`role:read`、`doc:*`、`course:*`、`course:attach_doc`；**无** `role:create/update/delete/assign_perm`、**无** `system:*`、**无** `data:scope:all` |
-| 部门管理员 | `dept_admin` | `dept:read`、`user:*`、`user:reset_password`、`role:read`、`doc:*`、`course:*`、`course:attach_doc`；**无** 部门写、**无** 角色写与配权、**无** `system:*`、**无** `data:scope:all` |
-| 普通员工 | `staff` | `dept:read`、`doc:read`、`course:read` |
+| 部门管理员 | `dept_admin`    | `dept:read`、`user:*`、`user:reset_password`、`role:read`、`doc:*`、`course:*`、`course:attach_doc`；**无** 部门写、**无** 角色写与配权、**无** `system:*`、**无** `data:scope:all`                     |
+| 普通员工   | `staff`         | `dept:read`、`doc:read`、`course:read`                                                                                                                                                                  |
 
 种子创建根部门（默认名「总公司」）。初始管理员来自 `INIT_ADMIN_USERNAME`、`INIT_ADMIN_PASSWORD`，归属根部门，角色为超级管理员。种子写入默认品牌：显示名 `DocTrainAI`、默认副文案、Logo 可空。
 
@@ -119,6 +125,7 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 个人主题色 T1：已登录用户更新自己的 `theme_primary` 即可，**不**要求 `system:update`。
 
 ## 🔴 阶段 1 接口
+
 前缀 `/api/v1`。除登录、健康检查、**公开品牌只读**外都要登录。
 
 - `GET /health`：不鉴权。
@@ -141,6 +148,7 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 不在可见集合内的详情/下载/预览返回 404。
 
 ## 🔴 上传与预览
+
 业务文档：允许的扩展名和大小上限放在**环境变量**配置中。
 
 - 阶段 1 默认扩展名：`pdf,md,docx,xlsx,pptx`（`ALLOWED_EXTENSIONS` 可覆盖）。
@@ -154,6 +162,7 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 Logo（T4）：单独限制较小体积与图片扩展名（如 png/jpg/webp），细则实现时写入配置常量或 env，不做成设置页可改项；Logo 也走存储抽象。
 
 ## 🔴 异常、删除与配置
+
 全局异常处理器产出 PROJECT_SPEC 规定的响应体。预期内的 403、404、409 不打印堆栈。
 
 业务查询默认排除 `is_deleted = true`。
@@ -165,9 +174,11 @@ Logo（T4）：单独限制较小体积与图片扩展名（如 png/jpg/webp）�
 `compose.yaml` 在阶段 1 只声明 PostgreSQL 16，镜像使用 `pgvector/pgvector`。数据库对外端口和账号写入 `.env.example`，不写进代码。
 
 ## 🔴 阶段 1 测试
+
 pytest 至少覆盖：登录成功与失败、无令牌 401、缺权限码 403、audience 外文档详情/下载/预览 404、有 `doc:read` 且落在 audience 子树内可读、超管无 audience 时亦不可仅凭 `data:scope:all` 读到未授权文档、品牌公开接口可匿名读、无 `system:update` 不能改品牌、登录用户可改本人主题；上传拒绝不在白名单的扩展名。
 
 ## 🔴 阶段 2 契约（现在不实现）
+
 解析任务、分片、向量和全文索引入 `models/ai_ext`。文档主表不加解析状态列。任务状态为 `pending`、`running`、`succeeded`、`failed`，失败时保存错误摘要。Worker 通过 `StorageBackend` 读取原件（Local 或届时的 S3 实现）。
 
 分片保存 `doc_id`、正文、位置（pdf 页码、md 标题、office 近似位置等）和检索所需字段。按扩展名选择 Loader；再按 `CHUNK_SIZE` 与 `CHUNK_OVERLAP` 控制长度。两个数值来自配置。
@@ -192,6 +203,7 @@ pytest 至少覆盖：登录成功与失败、无令牌 401、缺权限码 403�
 阶段 2 增加的配置：`REDIS_URL`、`EMBEDDING_BASE_URL`、`EMBEDDING_API_KEY`、`EMBEDDING_MODEL`、`EMBEDDING_DIM`、`CHUNK_SIZE`、`CHUNK_OVERLAP`、`HYBRID_VECTOR_WEIGHT`。
 
 ## 🔴 阶段 3 契约（现在不实现）
+
 只做一个 LangGraph Agent，不拆多 Agent。意图是图里的一个节点，用一次模型调用或明确规则区分三类：需要检索的规章问题、与资料无关的闲聊、应拒答的问题。不训练分类模型。
 
 需要检索时走阶段 2 的两路检索。闲聊不检索，也不编造文档引用。合并后的最高分低于 `ABSTAIN_SCORE_THRESHOLD` 时，不调用对话模型生成事实内容，返回配置中的固定拒答文案，并在消息上标记 `refused`。
@@ -218,12 +230,14 @@ SSE 事件只用这四种：
 测试至少覆盖：低于拒答阈值时不调用对话模型；不可信文档夹具不能改写系统行为；没有 `agent:chat` 时返回 403。
 
 ## 🟡 SHOULD
+
 1. Schema 按 Create、Update、Response 拆分。
 2. 路由保持薄：收参数、调用依赖、调用 service、返回结果。
 3. 模型调用设置超时。阶段 2 的解析任务失败后可重试，次数写入配置。
 4. 提交前运行 ruff。
 
 ## ⚫ MUST NOT
+
 1. `system` 下的模块禁止导入 `ai_ext`。
 2. 禁止在路由函数中写解析、检索、提示词组装和模型调用。
 3. 禁止修改已注册权限码的含义。新增码先改本规约再种子。

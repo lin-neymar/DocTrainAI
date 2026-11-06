@@ -29,6 +29,9 @@ build/
 server/storage/*
 !server/storage/.gitkeep
 
+# pytest 专用测试存储目录（tests/conftest.py 将 FILE_STORAGE_DIR 指到此处）
+server/.pytest_storage/
+
 # 前端依赖与构建产物
 node_modules/
 web/dist/
