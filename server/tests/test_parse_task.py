@@ -1,13 +1,16 @@
 """阶段 2：解析任务服务测试（需 Postgres + seed；ARQ 入队以 mock 顶替）。
 
-覆盖任务链路三个契约点：
+覆盖任务链路四个契约点：
   1. 先落库 pending 再入队（手动接口与上传回调两条入口）；
   2. 入队失败：任务标 failed 并写 error_summary，异常不阻断文档主流程；
-  3. 任务的创建与查询都必须先过文档可见性（越权 404 语义）。
+  3. 任务的创建与查询都必须先过文档可见性（越权 404 语义）；
+  4. worker 执行侧状态机：成功落 succeeded；失败按 PARSE_MAX_RETRY 决定
+     抛回重试（保留 running）或耗尽落 failed。
 
 注意：fixture 的 skip 只包造数阶段，测试体内的断言失败不会被吞成 skip。
 """
 
+import asyncio
 import uuid
 from types import SimpleNamespace
 
@@ -15,11 +18,14 @@ import bcrypt
 import pytest
 from sqlalchemy import delete, select
 
+from app.config import settings
 from app.core.exceptions import NotFoundError
 from app.database import SessionLocal
 from app.models.ai_ext.parse_task import (
     PARSE_STATUS_FAILED,
     PARSE_STATUS_PENDING,
+    PARSE_STATUS_RUNNING,
+    PARSE_STATUS_SUCCEEDED,
     DocParseTask,
 )
 from app.models.system.dept import Dept
@@ -28,6 +34,8 @@ from app.models.system.role import Role
 from app.models.system.user import User, UserRole
 from app.services.ai_ext import integration, parse_task_service
 from app.services.system import doc_service
+from app.workers import tasks as worker_tasks
+from app.workers.tasks import parse_document
 from scripts.seed import run_seed
 
 
@@ -259,3 +267,66 @@ def test_task_read_and_create_require_doc_visibility(pt_env, monkeypatch) -> Non
         )
         is None
     )
+
+
+def _reload_task(task_id: uuid.UUID) -> DocParseTask:
+    """worker 用自己的会话写库，这里新开短会话读终态，避免身份映射脏读。"""
+    with SessionLocal() as s:
+        task = s.get(DocParseTask, task_id)
+        assert task is not None
+        s.expunge(task)
+        return task
+
+
+def test_worker_success_marks_succeeded(pt_env, monkeypatch) -> None:
+    """解析成功：running → succeeded。"""
+    session, env = pt_env
+    monkeypatch.setattr(parse_task_service, "enqueue_parse_document", lambda tid: None)
+    task = parse_task_service.enqueue_for_doc(session, doc_id=env.doc_a.id)
+    monkeypatch.setattr(worker_tasks, "ingest_document", lambda s, doc_id: 3)
+
+    asyncio.run(parse_document({"job_try": 0}, str(task.id)))
+
+    assert _reload_task(task.id).status == PARSE_STATUS_SUCCEEDED
+
+
+def test_worker_failure_within_retry_budget_raises(pt_env, monkeypatch) -> None:
+    """重试未耗尽：抛回异常交给 ARQ 重入队，任务保留 running 并记尝试次数。"""
+    session, env = pt_env
+    monkeypatch.setattr(parse_task_service, "enqueue_parse_document", lambda tid: None)
+    monkeypatch.setattr(settings, "parse_max_retry", 1)
+    task = parse_task_service.enqueue_for_doc(session, doc_id=env.doc_a.id)
+
+    def boom(s, doc_id):
+        raise ValueError("解析炸了")
+
+    monkeypatch.setattr(worker_tasks, "ingest_document", boom)
+
+    with pytest.raises(ValueError):
+        asyncio.run(parse_document({"job_try": 0}, str(task.id)))
+
+    reloaded = _reload_task(task.id)
+    assert reloaded.status == PARSE_STATUS_RUNNING
+    assert reloaded.error_summary is not None
+    assert "将重试" in reloaded.error_summary
+
+
+def test_worker_retry_exhausted_marks_failed(pt_env, monkeypatch) -> None:
+    """重试耗尽（job_try 达到上限的最后一跑）：落 failed 并写错误摘要。"""
+    session, env = pt_env
+    monkeypatch.setattr(parse_task_service, "enqueue_parse_document", lambda tid: None)
+    monkeypatch.setattr(settings, "parse_max_retry", 1)
+    task = parse_task_service.enqueue_for_doc(session, doc_id=env.doc_a.id)
+
+    def boom(s, doc_id):
+        raise ValueError("解析又炸了")
+
+    monkeypatch.setattr(worker_tasks, "ingest_document", boom)
+
+    with pytest.raises(ValueError):
+        asyncio.run(parse_document({"job_try": 1}, str(task.id)))
+
+    reloaded = _reload_task(task.id)
+    assert reloaded.status == PARSE_STATUS_FAILED
+    assert reloaded.error_summary is not None
+    assert "重试耗尽" in reloaded.error_summary

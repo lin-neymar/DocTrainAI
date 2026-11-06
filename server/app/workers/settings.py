@@ -11,4 +11,5 @@ from app.workers.tasks import parse_document
 class WorkerSettings:
     functions = [parse_document]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
-    # 可按需加 max_jobs、job_timeout；阶段 2 后续再配置化重试次数
+    # 任务函数抛异常时 ARQ 重入队的总尝试上限：首跑 1 次 + PARSE_MAX_RETRY 次重试
+    max_tries = settings.parse_max_retry + 1

@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     # 向量路权重；全文路为 1 - 该值（检索 service 使用）
     hybrid_vector_weight: float =0.7
 
+    # 解析任务失败后的重试次数（不含首次执行）；次数耗尽才落 failed
+    parse_max_retry: int = 2
+
     @property
     # 实现：把 CORS_ORIGINS 拆成 Origin 列表
     def cors_origin_list(self) -> list[str]:
