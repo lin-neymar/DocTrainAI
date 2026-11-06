@@ -4,6 +4,7 @@
  * 可见组织：有 data:scope:all 或 dept:create 可勾选；部门官无勾选（后端固定本部门）。
  */
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import type { Ref } from 'vue'
 import type {
   FormInstance,
   FormRules,
@@ -98,6 +99,9 @@ const editForm = reactive({
   dept_id: '',
 })
 const pendingEditAudience = ref<string[]>([])
+/** 编辑弹窗回显装载中：同 tick 内 dept_id 与 editVisible 的 watcher 按创建顺序触发，
+ * 需跳过「改部门重置勾选」逻辑，否则会覆盖刚回显的 audience */
+let populatingEdit = false
 
 const uploadAudienceTree = computed(() => audienceTreeForOwner(deptTree.value, uploadForm.dept_id))
 const editAudienceTree = computed(() => audienceTreeForOwner(deptTree.value, editForm.dept_id))
@@ -345,9 +349,11 @@ function readAudienceKeys(treeRef: TreeExpose | undefined): string[] | undefined
   return (treeRef?.getCheckedKeys(false) ?? []).map(String)
 }
 
-async function setAudienceKeys(treeRef: TreeExpose | undefined, keys: string[]) {
+// 实现：渲染完成后勾选指定节点。传 ref 本体而非解包值：
+// 弹窗首次打开时树尚未挂载，nextTick 后重取 .value 才能拿到实例
+async function setAudienceKeys(treeRef: Ref<TreeExpose | undefined>, keys: string[]) {
   await nextTick()
-  treeRef?.setCheckedKeys(keys)
+  treeRef.value?.setCheckedKeys(keys)
 }
 
 function openUpload() {
@@ -372,33 +378,39 @@ function openEdit(row: unknown) {
   if (!pendingEditAudience.value.length && editForm.dept_id) {
     pendingEditAudience.value = [editForm.dept_id]
   }
+  populatingEdit = true
   editVisible.value = true
+  // watcher 先于 nextTick 回调执行：本轮装载结束后再恢复响应用户改部门
+  void nextTick().then(() => {
+    populatingEdit = false
+  })
 }
 
 watch(uploadVisible, (open) => {
   if (!open || !showAudiencePicker.value) return
-  void setAudienceKeys(uploadAudienceTreeRef.value, uploadForm.dept_id ? [uploadForm.dept_id] : [])
+  void setAudienceKeys(uploadAudienceTreeRef, uploadForm.dept_id ? [uploadForm.dept_id] : [])
 })
 
 watch(editVisible, (open) => {
   if (!open || !showAudiencePicker.value) return
-  void setAudienceKeys(editAudienceTreeRef.value, pendingEditAudience.value)
+  void setAudienceKeys(editAudienceTreeRef, pendingEditAudience.value)
 })
 
 watch(
   () => uploadForm.dept_id,
   (id) => {
     if (!uploadVisible.value || !showAudiencePicker.value) return
-    void setAudienceKeys(uploadAudienceTreeRef.value, id ? [id] : [])
+    void setAudienceKeys(uploadAudienceTreeRef, id ? [id] : [])
   },
 )
 
 watch(
   () => editForm.dept_id,
   (id) => {
+    if (populatingEdit) return
     if (!editVisible.value || !showAudiencePicker.value) return
     pendingEditAudience.value = id ? [id] : []
-    void setAudienceKeys(editAudienceTreeRef.value, pendingEditAudience.value)
+    void setAudienceKeys(editAudienceTreeRef, pendingEditAudience.value)
   },
 )
 
