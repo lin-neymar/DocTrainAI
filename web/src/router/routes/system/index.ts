@@ -1,5 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router'
 
+// 引入 ai_ext 模块的子路由
+import { aiExtChildRoutes } from '../ai_ext'
 /**
  * 阶段 1 系统路由。
  * meta.public：无需登录；meta.permission：侧栏与守卫共用（只认权限码）。
@@ -61,6 +63,7 @@ export const systemRoutes: RouteRecordRaw[] = [
         // 已登录即可：个人主题 T1；品牌区块仍按 system:read / system:update 显隐
         meta: { title: '系统设置' },
       },
+      ...aiExtChildRoutes, // 引入 ai_ext 模块的子路由
     ],
   },
 ]
