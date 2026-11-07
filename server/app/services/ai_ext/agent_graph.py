@@ -50,6 +50,7 @@ class AgentState(TypedDict, total=False):
     user_id: uuid.UUID | None
     session: Session | None
     on_token: Callable[[str], None] | None
+    on_citation: Callable[[dict], None] | None
     intent: str
     chunks: list[dict]
     chunk_ids: list[str]
@@ -80,14 +81,18 @@ def _abstain_node(state: AgentState) -> dict:
     return {"refused": top < settings.abstain_score_threshold}
 
 
-# 实现：生成节点——组装消息后流式调用对话模型
+# 实现：生成节点——先回调引用（契约：citation 先于正文），再流式调用对话模型
 def _generate_node(state: AgentState) -> dict:
     messages = _build_messages(state)
-    answer = stream_answer(messages, state.get("on_token"))
     if state["intent"] == INTENT_RETRIEVAL:
         citations = _build_citations(state.get("chunks") or [])
     else:
         citations = []
+    on_citation = state.get("on_citation")
+    for item in citations:
+        if on_citation:
+            on_citation(item)
+    answer = stream_answer(messages, state.get("on_token"))
     return {
         "answer": answer,
         "citations": citations,
@@ -188,6 +193,7 @@ def run_agent(
     question: str,
     history: list[dict[str, str]],
     on_token: Callable[[str], None] | None = None,
+    on_citation: Callable[[dict], None] | None = None,
 ) -> dict:
     return AGENT_GRAPH.invoke(
         {
@@ -196,5 +202,6 @@ def run_agent(
             "user_id": user_id,
             "session": session,
             "on_token": on_token,
+            "on_citation": on_citation,
         }
     )

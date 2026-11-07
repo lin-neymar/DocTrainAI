@@ -310,7 +310,7 @@ def test_g_four_roles_permission_spot_check(seeded: None) -> None:
     assert "data:scope:all" not in expected["company_admin"]
     assert "dept:create" not in expected["dept_admin"]
     assert "role:assign_perm" not in expected["dept_admin"]
-    assert expected["staff"] == {"dept:read", "doc:read", "course:read"}
+    assert expected["staff"] == {"dept:read", "doc:read", "course:read", "agent:chat"}
 
 
 def test_g_dept_admin_audience_forced_ignores_client(seeded: None) -> None:

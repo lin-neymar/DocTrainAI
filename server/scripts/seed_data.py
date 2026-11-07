@@ -43,6 +43,7 @@ PERMISSIONS: Final[list[tuple[str, str]]] = [
     ("course:attach_doc", "课程挂接文档"),
     ("system:read", "系统设置查看"),
     ("system:update", "系统设置更新"),
+    ("agent:chat", "智能对话"),
     # 管理范围开关：全公司；不自动获得全部文档/课程阅读权（方案 B）
     ("data:scope:all", "全公司数据范围"),
 ]
@@ -92,6 +93,7 @@ ROLES: Final[list[tuple[str, str, list[str]]]] = [
             "course:update",
             "course:delete",
             "course:attach_doc",
+            "agent:chat",
         ],
     ),
     (
@@ -114,6 +116,7 @@ ROLES: Final[list[tuple[str, str, list[str]]]] = [
             "course:update",
             "course:delete",
             "course:attach_doc",
+            "agent:chat",
         ],
     ),
     (
@@ -123,6 +126,7 @@ ROLES: Final[list[tuple[str, str, list[str]]]] = [
             "dept:read",
             "doc:read",
             "course:read",
+            "agent:chat",
         ],
     ),
 ]
