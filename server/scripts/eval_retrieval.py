@@ -1,8 +1,11 @@
-"""检索效果评估脚本（离线运行，不启动服务）。
+"""对话效果评估脚本（离线运行，不启动服务）。
 
-读取 JSONL 评测集（每行 id / question / expected_doc_ids），
-以初始管理员身份调用检索服务取前 5 条结果，
-命中文档与期望文档有交集记为命中，输出逐题明细与 Recall@5。
+读取 JSONL 评测集（每行 id / question / expected_doc_ids / 可选 expect_abstain），
+以初始管理员身份逐题走 Agent（对话模型用脚本内置假客户端，检索与拒答判断走真实实现），
+输出逐题明细与三项指标：
+  - Recall@5：非拒答样本，检索前 5 条与期望文档有交集即命中（与阶段 2 相同）；
+  - 引用命中率：非拒答且未拒答样本，回答引用文档与期望文档有交集即命中；
+  - 拒答正确率：expect_abstain=true 的样本回答 refused=true 记正确。
 
 用法（在 server/ 目录）：
     .venv/bin/python -m scripts.eval_retrieval scripts/eval_samples.jsonl
@@ -23,7 +26,13 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models.system.doc import Doc
 from app.models.system.user import User
+from app.services.ai_ext import agent_graph
 from app.services.ai_ext.retrieval_service import search_chunks
+
+REQUIRED_FIELDS = ("id", "question", "expected_doc_ids")
+
+# 假模型生成的固定回答文本（只验证检索与拒答链路，不评估生成质量）
+FAKE_ANSWER = "（脚本化回答）"
 
 REQUIRED_FIELDS = ("id", "question", "expected_doc_ids")
 
@@ -50,11 +59,54 @@ def _load_cases(path: Path) -> list[dict]:
         if not isinstance(case["expected_doc_ids"], list) or not case["expected_doc_ids"]:
             print(f"第 {lineno} 行 expected_doc_ids 须为非空数组", file=sys.stderr)
             raise SystemExit(1)
+        if "expect_abstain" in case and not isinstance(case["expect_abstain"], bool):
+            print(f"第 {lineno} 行 expect_abstain 须为布尔", file=sys.stderr)
+            raise SystemExit(1)
         cases.append(case)
     return cases
 
 
-# 实现：以初始管理员身份逐题检索，命中=前 5 条与期望文档有交集
+# 实现：安装脚本内置假模型——分类按样例 expect_abstain 决定，生成返回固定文本
+def _install_fake_model(cases: list[dict]) -> None:
+    expect_by_question = {
+        str(case["question"]): bool(case.get("expect_abstain", False))
+        for case in cases
+    }
+
+    def fake_classify(question: str) -> str:
+        return "refuse" if expect_by_question.get(question, False) else "retrieval"
+
+    def fake_stream(messages, on_token=None) -> str:
+        if on_token:
+            on_token(FAKE_ANSWER)
+        return FAKE_ANSWER
+
+    agent_graph.classify_intent = fake_classify
+    agent_graph.stream_answer = fake_stream
+
+
+# 实现：三指标汇总——返回各指标 (命中数, 总数)
+def _calc_metrics(results: list[dict]) -> dict[str, tuple[int, int]]:
+    non_abstain = [r for r in results if not r["expect_abstain"]]
+    answered = [r for r in non_abstain if not r["refused"]]
+    abstain_cases = [r for r in results if r["expect_abstain"]]
+    return {
+        "recall": (
+            sum(1 for r in non_abstain if r["retrieval_hit"]),
+            len(non_abstain),
+        ),
+        "citation": (
+            sum(1 for r in answered if r["citation_hit"]),
+            len(answered),
+        ),
+        "abstain": (
+            sum(1 for r in abstain_cases if r["refused"]),
+            len(abstain_cases),
+        ),
+    }
+
+
+# 实现：以初始管理员身份逐题走 Agent，输出明细与三指标
 def run_eval(cases: list[dict]) -> None:
     with SessionLocal() as session:
         admin = session.scalar(
@@ -67,22 +119,55 @@ def run_eval(cases: list[dict]) -> None:
             print("初始管理员不存在，请先执行 .venv/bin/python -m scripts.seed", file=sys.stderr)
             raise SystemExit(1)
 
-        hit = 0
+        _install_fake_model(cases)
+        results: list[dict] = []
         for case in cases:
-            items = search_chunks(
-                session, user_id=admin.id, query=str(case["question"]), top_k=5
-            )
-            hit_doc_ids = {item["doc_id"] for item in items}
+            question = str(case["question"])
+            expect_abstain = bool(case.get("expect_abstain", False))
             expected = {UUID(str(x)) for x in case["expected_doc_ids"]}
-            is_hit = bool(hit_doc_ids & expected)
-            hit += int(is_hit)
-            brief = [str(d)[:8] for d in sorted(hit_doc_ids)]
-            mark = "命中" if is_hit else "未中"
-            print(f"[{mark}] {case['id']} “{case['question']}” → 命中文档 {brief}")
 
-    total = len(cases)
-    recall = hit / total if total else 0.0
-    print(f"\nRecall@5 = {hit}/{total} = {recall:.2%}")
+            # Recall@5：只在非拒答样本检索（与阶段 2 相同）
+            retrieval_hit: bool | None = None
+            if not expect_abstain:
+                items = search_chunks(session, user_id=admin.id, query=question, top_k=5)
+                retrieval_hit = bool({item["doc_id"] for item in items} & expected)
+
+            result = agent_graph.run_agent(
+                session, user_id=admin.id, question=question, history=[]
+            )
+            refused = bool(result["refused"])
+
+            # 引用命中：未拒答样本，引用文档与期望文档有交集
+            citation_hit: bool | None = None
+            if not expect_abstain and not refused:
+                cited = {UUID(str(c["doc_id"])) for c in result.get("citations") or []}
+                citation_hit = bool(cited & expected)
+
+            results.append(
+                {
+                    "id": case["id"],
+                    "expect_abstain": expect_abstain,
+                    "retrieval_hit": retrieval_hit,
+                    "citation_hit": citation_hit,
+                    "refused": refused,
+                }
+            )
+            if expect_abstain:
+                mark = "正确拒答" if refused else "错误未拒答"
+            else:
+                mark = "命中" if retrieval_hit else "未中"
+            print(f"[{mark}] {case['id']} “{question}” refused={refused}")
+
+    metrics = _calc_metrics(results)
+    recall_hit, recall_total = metrics["recall"]
+    citation_hit, citation_total = metrics["citation"]
+    abstain_hit, abstain_total = metrics["abstain"]
+    recall = recall_hit / recall_total if recall_total else 0.0
+    citation = citation_hit / citation_total if citation_total else 0.0
+    abstain = abstain_hit / abstain_total if abstain_total else 0.0
+    print(f"\nRecall@5 = {recall_hit}/{recall_total} = {recall:.2%}")
+    print(f"引用命中率 = {citation_hit}/{citation_total} = {citation:.2%}")
+    print(f"拒答正确率 = {abstain_hit}/{abstain_total} = {abstain:.2%}")
 
 
 # 实现：列出库内未删除文档的 id 与标题，供人工构建评测集
