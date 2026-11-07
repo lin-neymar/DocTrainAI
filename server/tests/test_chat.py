@@ -22,6 +22,7 @@ from app.models.ai_ext.chat import (
     CHAT_ROLE_USER,
     ChatCallLog,
     ChatMessage,
+    ChatSession,
 )
 from app.models.system.dept import Dept
 from app.models.system.role import Role
@@ -252,3 +253,83 @@ def test_send_message_error_event_on_failure(admin_headers, monkeypatch) -> None
             ).all()
         )
     assert count == 0
+
+
+def test_delete_own_session_keeps_messages(admin_headers, monkeypatch) -> None:
+    """软删除自己的会话：访问路径全 404，消息与调用日志保留（审计）。"""
+    resp = client.post("/api/v1/chat/sessions", headers=admin_headers)
+    session_id = resp.json()["data"]["id"]
+
+    def fake_run_agent(
+        session, *, user_id, question, history, on_token=None, on_citation=None
+    ):
+        return {"answer": "好的", "refused": False, "citations": [], "chunk_ids": []}
+
+    monkeypatch.setattr(chat_service, "run_agent", fake_run_agent)
+    resp = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={"content": "你好"},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 200
+
+    resp = client.delete(f"/api/v1/chat/sessions/{session_id}", headers=admin_headers)
+    assert resp.status_code == 200
+
+    # 列表不含该会话；读消息 404
+    resp = client.get("/api/v1/chat/sessions", headers=admin_headers)
+    ids = {item["id"] for item in resp.json()["data"]["items"]}
+    assert session_id not in ids
+    resp = client.get(
+        f"/api/v1/chat/sessions/{session_id}/messages", headers=admin_headers
+    )
+    assert resp.status_code == 404
+
+    # 数据库：会话软删除，消息与调用日志仍保留
+    with SessionLocal() as session:
+        chat_session = session.get(ChatSession, uuid.UUID(session_id))
+        assert chat_session.is_deleted is True
+        messages = session.scalars(
+            select(ChatMessage).where(ChatMessage.session_id == session_id)
+        ).all()
+        assert len(messages) == 2
+        log = session.scalar(
+            select(ChatCallLog).where(ChatCallLog.session_id == session_id)
+        )
+        assert log is not None
+
+
+def test_delete_other_user_session_returns_404(admin_headers) -> None:
+    """他人会话删除与不存在同态 404（不泄露资源存在性）。"""
+    resp = client.post("/api/v1/chat/sessions", headers=admin_headers)
+    session_id = resp.json()["data"]["id"]
+
+    username, password = _create_staff_user()
+    other = _login(username, password)
+
+    resp = client.delete(f"/api/v1/chat/sessions/{session_id}", headers=other)
+    assert resp.status_code == 404
+
+
+def test_delete_missing_session_returns_404(admin_headers) -> None:
+    """删除不存在的会话 404。"""
+    resp = client.delete(f"/api/v1/chat/sessions/{uuid.uuid4()}", headers=admin_headers)
+    assert resp.status_code == 404
+
+
+def test_delete_deleted_session_returns_404(admin_headers) -> None:
+    """重复删除 404：已删会话与不存在同态。"""
+    resp = client.post("/api/v1/chat/sessions", headers=admin_headers)
+    session_id = resp.json()["data"]["id"]
+    assert (
+        client.delete(
+            f"/api/v1/chat/sessions/{session_id}", headers=admin_headers
+        ).status_code
+        == 200
+    )
+    assert (
+        client.delete(
+            f"/api/v1/chat/sessions/{session_id}", headers=admin_headers
+        ).status_code
+        == 404
+    )

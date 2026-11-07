@@ -101,3 +101,18 @@ def send_message(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.delete(
+    "/sessions/{session_id}",
+    summary="软删除会话",
+    description="消息与调用日志保留（审计）。他人/不存在/已删会话 404。需要 agent:chat。",
+)
+def delete_session(
+    session_id: UUID,
+    current_user: Annotated[User, Depends(require_permission("agent:chat"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    chat_service.soft_delete_session(db, user_id=current_user.id, session_id=session_id)
+    db.commit()
+    return success()

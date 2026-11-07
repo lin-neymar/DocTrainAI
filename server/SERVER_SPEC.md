@@ -246,6 +246,7 @@ SSE 事件只用这四种：
 - `GET /chat/sessions`：当前用户会话列表，分页（默认 20，最大 100），按 `updated_at` 倒序。
 - `GET /chat/sessions/{id}/messages`：会话消息（含引用），按时间正序。
 - `POST /chat/sessions/{id}/messages`：发送消息，body 为 `{"content": "..."}`；SSE 流式返回。
+- `DELETE /chat/sessions/{id}`：软删除会话（消息与调用日志保留）；他人会话 404，返回统一响应体。
 
 ### 阶段 3 SSE 细节
 

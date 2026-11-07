@@ -70,6 +70,12 @@ def get_owned_session(db: Session, user_id: uuid.UUID, session_id: uuid.UUID) ->
     return chat_session
 
 
+# 实现：软删除会话——消息与调用日志保留（审计），删除后一切访问路径 404
+def soft_delete_session(db: Session, user_id: uuid.UUID, session_id: uuid.UUID) -> None:
+    chat_session = get_owned_session(db, user_id, session_id)
+    chat_session.is_deleted = True
+
+
 def list_messages(db: Session, session_id: uuid.UUID) -> list[ChatMessage]:
     return list(
         db.scalars(
