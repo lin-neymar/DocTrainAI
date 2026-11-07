@@ -140,7 +140,7 @@ request.interceptors.response.use(
 )
 
 // 实现：401 清 token + 重置 user store，并跳转登录（避免循环依赖用动态 import）
-async function handleUnauthorized(): Promise<void> {
+export async function handleUnauthorized(): Promise<void> {
   clearToken()
   const { useUserStore } = await import('@/stores/user')
   useUserStore().resetSession()
