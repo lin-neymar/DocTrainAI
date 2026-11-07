@@ -68,3 +68,8 @@ export function sendMessageStreamApi(
     signal,
   })
 }
+
+// 实现：软删除会话（消息与调用日志保留在后端）
+export function deleteSessionApi(sessionId: string) {
+  return request.delete<unknown, unknown>(`/api/v1/chat/sessions/${sessionId}`)
+}

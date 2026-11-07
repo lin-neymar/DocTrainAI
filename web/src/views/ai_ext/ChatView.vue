@@ -5,10 +5,11 @@
  * error 展示错误并可重试；发送中禁止再次发送与切换会话。
  */
 import { nextTick, onMounted, ref } from 'vue'
-import { ElButton, ElEmpty, ElInput, ElTag } from 'element-plus'
+import { ElButton, ElEmpty, ElInput, ElMessage, ElMessageBox, ElTag } from 'element-plus'
 
 import {
   createSessionApi,
+  deleteSessionApi,
   listMessagesApi,
   listSessionsApi,
   sendMessageStreamApi,
@@ -152,6 +153,35 @@ async function onCreateSession() {
   messages.value = []
 }
 
+// 实现：删除会话——确认后调用接口；激活会话被删时切换到剩余首个会话
+async function onDeleteSession(index: number, id: string) {
+  if (sending.value) return
+  try {
+    await ElMessageBox.confirm('删除该会话后对话记录不可恢复，确定删除？', '删除会话', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  try {
+    await deleteSessionApi(id)
+    const wasActive = activeSessionId.value === id
+    sessions.value.splice(index, 1)
+    if (wasActive) {
+      activeSessionId.value = null
+      messages.value = []
+      const first = sessions.value[0]
+      if (first) {
+        await switchSession(first.id)
+      }
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : '删除失败')
+  }
+}
+
 onMounted(() => {
   void loadSessions()
 })
@@ -181,8 +211,35 @@ onMounted(() => {
           :class="{ active: s.id === activeSessionId }"
           @click="!sending && switchSession(s.id)"
         >
-          <span class="session-name">会话 {{ sessions.length - i }}</span>
-          <span class="session-time">{{ formatDateTime(s.created_at) }}</span>
+          <div class="session-main">
+            <span class="session-name">会话 {{ sessions.length - i }}</span>
+            <span class="session-time">{{ formatDateTime(s.created_at) }}</span>
+          </div>
+          <button
+            v-if="!sending"
+            class="session-delete"
+            type="button"
+            title="删除会话"
+            @click.stop="onDeleteSession(i, s.id)"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 6h18" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
         </div>
       </div>
       <ElEmpty v-else description="暂无会话" :image-size="60" />
@@ -289,9 +346,17 @@ onMounted(() => {
   border-radius: 6px;
   cursor: pointer;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--dt-text);
+}
+
+.session-main {
+  display: flex;
   flex-direction: column;
   gap: 2px;
-  color: var(--dt-text);
+  min-width: 0;
 }
 
 .session-item:hover {
@@ -305,6 +370,32 @@ onMounted(() => {
 
 .session-item.active .session-time {
   color: rgba(255, 255, 255, 0.75);
+}
+
+/* 删除图标：默认次级色，悬停变红；激活项内为白色系 */
+.session-delete {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--dt-text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.session-delete:hover {
+  color: var(--el-color-danger);
+}
+
+.session-item.active .session-delete {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.session-item.active .session-delete:hover {
+  color: var(--el-color-danger);
 }
 
 .session-name {
