@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.config import settings
-from app.services.ai_ext import agent_graph
+from app.services.ai_ext import agent_graph, chat_client
 from app.services.ai_ext.agent_graph import run_agent
 
 
@@ -44,9 +44,10 @@ def _install_fake_stream(monkeypatch, answer: str = "收到。") -> dict:
     return captured
 
 
-# 实现：按需安装假意图分类与假检索
+# 实现：按需安装假意图分类与假检索（相关性默认放行，由具体用例覆盖无关场景）
 def _patch_intent_and_search(monkeypatch, intent: str, chunks: list[dict] | None) -> None:
     monkeypatch.setattr(agent_graph, "classify_intent", lambda q: intent)
+    monkeypatch.setattr(agent_graph, "check_relevance", lambda q, chunks: True)
     if chunks is not None:
         monkeypatch.setattr(
             agent_graph,
@@ -134,6 +135,45 @@ def test_abstain_below_threshold_skips_generation(monkeypatch) -> None:
     assert result["answer"] == settings.abstain_message
     assert result["citations"] == []
     assert result.get("chunk_ids") == ["11111111-1111-1111-1111-111111111111"]
+
+
+def test_unrelated_chunks_refuse_without_generation(monkeypatch) -> None:
+    """检索结果与问题无关：直接拒答，不调用生成、无引用（保留检索记录）。"""
+    _patch_intent_and_search(monkeypatch, "retrieval", [_chunk()])
+    monkeypatch.setattr(agent_graph, "check_relevance", lambda q, chunks: False)
+
+    def explode(messages, on_token=None):
+        raise AssertionError("资料无关时不得调用对话模型")
+
+    monkeypatch.setattr(agent_graph, "stream_answer", explode)
+
+    result = _run("中国是亚洲国家吗？")
+
+    assert result["refused"] is True
+    assert result["answer"] == settings.abstain_message
+    assert result["citations"] == []
+    assert result.get("chunk_ids") == ["11111111-1111-1111-1111-111111111111"]
+
+
+def _fake_relevance_model(monkeypatch, reply: str) -> None:
+    """安装假对话模型：相关性调用返回指定文案。"""
+
+    def fake_model():
+        return SimpleNamespace(invoke=lambda messages: SimpleNamespace(content=reply))
+
+    monkeypatch.setattr(chat_client, "get_chat_model", fake_model)
+
+
+def test_check_relevance_detects_unrelated(monkeypatch) -> None:
+    """相关性模型输出 unrelated → 判为不相关。"""
+    _fake_relevance_model(monkeypatch, "unrelated")
+    assert chat_client.check_relevance("中国是亚洲国家吗？", [_chunk()]) is False
+
+
+def test_check_relevance_invalid_output_defaults_related(monkeypatch) -> None:
+    """相关性模型输出非法文案 → 兜底 related（安全取向，放行到阈值判断）。"""
+    _fake_relevance_model(monkeypatch, "我觉得资料里没有答案")
+    assert chat_client.check_relevance("中国是亚洲国家吗？", [_chunk()]) is True
 
 
 def test_generates_when_score_above_threshold(monkeypatch) -> None:

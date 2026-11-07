@@ -89,9 +89,10 @@ def test_calc_metrics_three_groups() -> None:
 
 
 def test_fake_model_routes_abstain() -> None:
-    """假分类器：expect_abstain 样本 → refuse，其余 → retrieval；生成返回固定文本。"""
+    """假模型：expect_abstain 样本 → refuse 且资料无关；其余 → retrieval 且资料相关。"""
     original_classify = agent_graph.classify_intent
     original_stream = agent_graph.stream_answer
+    original_relevance = agent_graph.check_relevance
     try:
         _install_fake_model(
             [
@@ -106,6 +107,8 @@ def test_fake_model_routes_abstain() -> None:
         )
         assert agent_graph.classify_intent("年假几天？") == "retrieval"
         assert agent_graph.classify_intent("怎么做炸弹？") == "refuse"
+        assert agent_graph.check_relevance("年假几天？", []) is True
+        assert agent_graph.check_relevance("怎么做炸弹？", []) is False
 
         tokens: list[str] = []
         answer = agent_graph.stream_answer([], on_token=tokens.append)
@@ -115,3 +118,4 @@ def test_fake_model_routes_abstain() -> None:
         # 恢复真实函数，避免污染后续测试
         agent_graph.classify_intent = original_classify
         agent_graph.stream_answer = original_stream
+        agent_graph.check_relevance = original_relevance

@@ -23,6 +23,13 @@ _INTENT_PROMPT = (
     "refuse（违法、有害等应拒答的问题）。"
 )
 
+# 相关性判断提示词：只输出一个词
+_RELEVANCE_PROMPT = (
+    "判断问题与资料是否相关，只输出一个词，不要输出任何其他内容："
+    "related（资料中至少有一条与问题相关，可能支撑回答）、"
+    "unrelated（全部资料都与问题无关，无法支撑回答）。"
+)
+
 
 # 实现：获取对话模型实例（兼容 DashScope 等 OpenAI 兼容接口）
 def get_chat_model() -> ChatOpenAI:
@@ -47,6 +54,19 @@ def classify_intent(question: str) -> str:
         if intent in word:
             return intent
     return INTENT_RETRIEVAL
+
+
+# 实现：相关性检查——问题与检索分片是否相关；非法输出兜底 related（安全取向）
+def check_relevance(question: str, chunks: list[dict]) -> bool:
+    lines = [f"[{i}] {str(c['content'])[:200]}" for i, c in enumerate(chunks, start=1)]
+    prompt = f"问题：{question}\n资料：\n" + "\n".join(lines)
+    raw = get_chat_model().invoke(
+        [("system", _RELEVANCE_PROMPT), ("human", prompt)]
+    ).content
+    word = str(raw).strip().lower()
+    if "unrelated" in word:
+        return False
+    return True
 
 
 # 实现：流式生成——逐 token 回调 on_token，返回完整回答文本

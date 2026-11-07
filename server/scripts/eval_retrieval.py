@@ -81,8 +81,13 @@ def _install_fake_model(cases: list[dict]) -> None:
             on_token(FAKE_ANSWER)
         return FAKE_ANSWER
 
+    def fake_relevance(question: str, chunks: list[dict]) -> bool:
+        # 期望拒答的样本：资料判为无关 → 走 refuse（与真实链路拒答路径一致）
+        return not expect_by_question.get(question, False)
+
     agent_graph.classify_intent = fake_classify
     agent_graph.stream_answer = fake_stream
+    agent_graph.check_relevance = fake_relevance
 
 
 # 实现：三指标汇总——返回各指标 (命中数, 总数)

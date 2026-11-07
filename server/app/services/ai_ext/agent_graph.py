@@ -1,9 +1,10 @@
-"""LangGraph 单 Agent：意图 → 检索/闲聊/拒答 → 生成。
+"""LangGraph 单 Agent：意图 → 检索/闲聊/拒答 → 相关性 → 阈值 → 生成。
 
 对应 SERVER_SPEC 阶段 3 契约：
 - 只做一个 Agent；意图是图中的一个节点，用一次模型调用区分三类；
 - 需检索走阶段 2 两路检索；闲聊不检索、无引用；
-- 合并最高分低于 ABSTAIN_SCORE_THRESHOLD 时不调用对话模型，返回固定拒答文案；
+- 检索后先做相关性检查：资料与问题无关直接拒答（不生成、无引用）；
+- 相关时合并最高分低于 ABSTAIN_SCORE_THRESHOLD 则不调用对话模型，返回固定拒答文案；
 - 系统指令独立为 system 消息，文档片段只进人类消息的引用区块并标注不可执行。
 """
 
@@ -20,6 +21,7 @@ from app.config import settings
 from app.services.ai_ext.chat_client import (
     INTENT_CHIT_CHAT,
     INTENT_RETRIEVAL,
+    check_relevance,
     classify_intent,
     stream_answer,
 )
@@ -61,6 +63,7 @@ class AgentState(TypedDict, total=False):
     intent: str
     chunks: list[dict]
     chunk_ids: list[str]
+    relevant: bool
     refused: bool
     answer: str
     citations: list[dict]
@@ -80,6 +83,14 @@ def _retrieve_node(state: AgentState) -> dict:
         session, user_id=user_id, query=state["question"], top_k=settings.retrieval_top_k
     )
     return {"chunks": chunks, "chunk_ids": [str(c["chunk_id"]) for c in chunks]}
+
+
+# 实现：相关性检查——资料与问题无关时直接拒答，杜绝无关引用与常识作答
+def _relevance_node(state: AgentState) -> dict:
+    chunks = state["chunks"]
+    if not chunks:
+        return {"relevant": False}
+    return {"relevant": check_relevance(state["question"], chunks)}
 
 
 # 实现：拒答判断——合并后最高分低于阈值即拒答
@@ -125,6 +136,10 @@ def _route_after_abstain(state: AgentState) -> str:
     return "refuse" if state["refused"] else "generate"
 
 
+def _route_after_relevance(state: AgentState) -> str:
+    return "abstain" if state["relevant"] else "refuse"
+
+
 # 实现：组装模型消息——system 独立 + 历史 + 人类消息（含引用区块）
 def _build_messages(state: AgentState) -> list[BaseMessage]:
     messages: list[BaseMessage] = [SystemMessage(content=SYSTEM_INSTRUCTION)]
@@ -168,6 +183,7 @@ def build_graph():
     graph = StateGraph(AgentState)
     graph.add_node("intent", _intent_node)
     graph.add_node("retrieve", _retrieve_node)
+    graph.add_node("relevance", _relevance_node)
     graph.add_node("abstain", _abstain_node)
     graph.add_node("generate", _generate_node)
     graph.add_node("refuse", _refuse_node)
@@ -178,7 +194,12 @@ def build_graph():
         _route_intent,
         path_map={"retrieve": "retrieve", "generate": "generate", "refuse": "refuse"},
     )
-    graph.add_edge("retrieve", "abstain")
+    graph.add_edge("retrieve", "relevance")
+    graph.add_conditional_edges(
+        "relevance",
+        _route_after_relevance,
+        path_map={"abstain": "abstain", "refuse": "refuse"},
+    )
     graph.add_conditional_edges(
         "abstain",
         _route_after_abstain,
