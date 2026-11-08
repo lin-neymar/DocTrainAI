@@ -4,7 +4,7 @@
  * 流式期间：citation 先建引用卡片，delta 逐段追加，done 回填 message_id，
  * error 展示错误并可重试；发送中禁止再次发送与切换会话。
  */
-import { nextTick, onMounted, ref } from 'vue'
+import { nextTick, onMounted, reactive, ref } from 'vue'
 import { ElButton, ElEmpty, ElInput, ElMessage, ElMessageBox, ElTag } from 'element-plus'
 
 import {
@@ -41,11 +41,29 @@ const input = ref('')
 const sending = ref(false)
 const listRef = ref<HTMLElement | null>(null)
 
-// 实现：滚动到最新消息
+// 流式跟随标志：发送后置 true，用户滚动离开底部即置 false 交还控制权
+let followStream = false
+
+// 实现：滚动到最新消息（主动操作：切换会话/加载历史/贴底跟随）
 async function scrollToBottom() {
   await nextTick()
   if (listRef.value) {
     listRef.value.scrollTop = listRef.value.scrollHeight
+  }
+}
+
+// 实现：贴底判定——内容底部与视口底缘的间距（padding/margin 已由
+// scrollHeight 涵盖，无需测量任何元素）
+function isAtBottom(): boolean {
+  const list = listRef.value
+  if (!list) return true
+  return list.scrollHeight - list.scrollTop - list.clientHeight < 4
+}
+
+// 实现：用户滚动处理——滚离底部即交还控制权；程序化贴底滚动 gap=0 不误伤
+function onListScroll() {
+  if (followStream && !isAtBottom()) {
+    followStream = false
   }
 }
 
@@ -91,35 +109,70 @@ async function doSend(text: string) {
     citations: [],
     streaming: false,
   }
-  const assistantMsg: UiMessage = {
+  // 注意：必须用 reactive 包裹——push 进 ref 数组后若继续修改「原始对象」
+  // 不会触发 Vue 渲染（数组内部存的是 proxy），流式内容会全部静默失效
+  const assistantMsg = reactive<UiMessage>({
     id: null,
     role: 'assistant',
     content: '',
     refused: false,
     citations: [],
     streaming: true,
-  }
+  })
   messages.value.push(userMsg, assistantMsg)
   sending.value = true
+  followStream = true
+  // 发送后贴底：新会话中内容不满一屏时 clamp 到 0（气泡在视口上方生长），
+  // 有历史消息时气泡贴底——两种情况都由「每帧贴底 + clamp」实现两阶段滚动
   await scrollToBottom()
+  // 帧合并：delta 先入缓冲，每帧（rAF）合并写入一次，避免高频重排；
+  // 只做帧合并不加慢——模型 token 的自然节奏原样保留
+  let pendingText = ''
+  let framePending = false
+  const flushFrame = () => {
+    if (pendingText) {
+      assistantMsg.content += pendingText
+      pendingText = ''
+      // 每帧贴底：气泡未触底时 scrollTop 赋值被 clamp 回原值（视口不动），
+      // 触底后每帧恰好贴底——文字随输出向上滚动，滚动条持续下移
+      if (followStream) {
+        void scrollToBottom()
+      }
+    }
+    framePending = false
+  }
+  const pushDelta = (text: string) => {
+    pendingText += text
+    if (!framePending) {
+      framePending = true
+      requestAnimationFrame(flushFrame)
+    }
+  }
   try {
     await sendMessageStreamApi(sessionId, text, (event) => {
       if (event.type === 'citation') {
+        // 引用数据照常入队，渲染推迟到流结束（模板 !m.streaming 条件）
         assistantMsg.citations.push(event.citation)
       } else if (event.type === 'delta') {
-        assistantMsg.content += event.text
+        pushDelta(event.text)
       } else if (event.type === 'done') {
+        // 冲刷残余缓冲后收尾：回填 id、展开引用、光标消失
+        flushFrame()
         assistantMsg.id = event.messageId
         assistantMsg.refused = event.refused
         assistantMsg.streaming = false
+        if (followStream) {
+          void scrollToBottom()
+        }
       } else if (event.type === 'error') {
+        flushFrame()
         assistantMsg.error = event.message
         assistantMsg.retryText = text
         assistantMsg.streaming = false
       }
-      void scrollToBottom()
     })
   } catch (err) {
+    flushFrame()
     assistantMsg.error = err instanceof Error ? err.message : '发送失败'
     assistantMsg.retryText = text
     assistantMsg.streaming = false
@@ -247,7 +300,13 @@ onMounted(() => {
 
     <!-- 消息区 -->
     <section class="chat-main">
-      <div ref="listRef" class="messages">
+      <div
+        ref="listRef"
+        class="messages"
+        @wheel.passive="followStream = false"
+        @touchmove.passive="followStream = false"
+        @scroll="onListScroll"
+      >
         <ElEmpty v-if="!messages.length" description="新建会话后开始提问" class="empty" />
         <div
           v-for="(m, i) in messages"
@@ -259,9 +318,11 @@ onMounted(() => {
             <ElTag v-if="m.refused" type="warning" size="small" class="refuse-tag">
               未找到相关资料
             </ElTag>
-            <div v-if="m.content" class="content">{{ m.content }}</div>
+            <div v-if="m.content" class="content">
+              {{ m.content }}<span v-if="m.streaming" class="cursor">▍</span>
+            </div>
             <div v-if="m.streaming && !m.content" class="typing">正在思考…</div>
-            <div v-if="m.citations.length" class="citations">
+            <div v-if="m.citations.length && !m.streaming && !m.error" class="citations">
               <CitationCard
                 v-for="(c, ci) in m.citations"
                 :key="`${c.chunk_id}-${ci}`"
@@ -478,6 +539,20 @@ onMounted(() => {
 .content {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 生成中光标：闪烁提示正在输出，done 后随 streaming=false 消失 */
+.cursor {
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--dt-color-primary);
+  animation: cursor-blink 1s steps(1) infinite;
+}
+
+@keyframes cursor-blink {
+  50% {
+    opacity: 0;
+  }
 }
 
 .typing {
