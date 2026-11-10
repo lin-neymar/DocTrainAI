@@ -24,11 +24,11 @@ server/
 │   ├── api/
 │   │   ├── system/
 │   │   └── ai_ext/
-│   ├── core/                   # JWT、当前用户、权限依赖、异常处理
+│   ├── core/                   # JWT、当前用户、权限依赖、异常处理；阶段 4 增结构化日志
 │   ├── services/
 │   │   ├── system/
 │   │   └── ai_ext/
-│   ├── workers/                # 阶段 2+：ARQ 任务。仍属于 server
+│   ├── workers/                # 阶段 2+：ARQ 任务。仍属于 server；阶段 4 起与 api 同镜像、容器内独立进程
 │   ├── storage/                # StorageBackend；阶段 1 仅 local
 │   └── utils/
 ├── scripts/
@@ -38,7 +38,9 @@ server/
 ├── tests/
 ├── requirements.txt
 ├── alembic.ini
-└── Dockerfile                  # 阶段 4 再添加
+├── Dockerfile                  # 阶段 4：python:3.11-slim + LibreOffice；api/worker 共用镜像
+├── docker-entrypoint.sh        # 阶段 4：alembic upgrade head + seed（幂等）后启动
+└── .dockerignore               # 阶段 4：排除 .venv、缓存、测试与本地存储
 ```
 
 ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在路由。
@@ -274,6 +276,52 @@ SSE 事件只用这四种：
 - 拒答正确率：`expect_abstain: true` 的样例回答 `refused` 为 true 记正确。
 
 JSONL 每行可选 `expect_abstain`（布尔）。样例在阶段 3 结束前扩充到 30–50 条并包含拒答样本。
+
+## 🔴 阶段 4 契约
+
+阶段 4 只做交付能力：容器化、可观测性（结构化日志）、CI/CD。不改任何业务接口行为，不新增业务表，不新增权限码。
+
+### 阶段 4 容器化
+
+server 用单 Dockerfile，基础镜像 `python:3.11-slim`，安装 LibreOffice writer/calc/impress（`soffice` 命令行供办公预览转换）。api 与 worker 共用同一镜像、以不同命令启动：api 跑 uvicorn，worker 跑 arq。
+
+api 容器经 `docker-entrypoint.sh` 启动，entrypoint 先执行 `alembic upgrade head`，再执行幂等 seed（权限码、内置角色、根部门、初始管理员、默认品牌），成功后才启动应用。worker 容器不跑迁移与 seed。
+
+新增 `.dockerignore`：排除 `.venv`、`__pycache__`、`.pytest_*`、`.ruff_cache`、`tests/`、`storage/`、本地 `.env`。
+
+`storage_data` 命名卷挂载到容器内 `FILE_STORAGE_DIR`：api 可写（上传、预览产物），worker 可读（解析取原件）。
+
+### 阶段 4 环境隔离与 Compose
+
+单一 `compose.yaml` 覆盖全部环境，服务为 api、worker、web、postgres、redis。所有环境相关值用 `${VAR:-默认}` 从环境注入，镜像不 baked 任何环境值（同一镜像可跑任意环境）。
+
+postgres 与 redis 不暴露宿主机端口，仅容器网络内访问；本地开发用 `compose.override.yaml` 复开端口，该文件已被 `.gitignore` 忽略，不入库。
+
+### 阶段 4 结构化日志
+
+手写 Formatter 实现，零新依赖，模块放 `app/core/logging.py`。
+
+新增配置 `LOG_FORMAT`，取值 `text` 或 `json`；默认随 `APP_ENV` 推导（dev=text、prod=json），可显式覆盖。
+
+api 侧 request_id 链路：中间件为每个请求生成 UUID4，写入 contextvar，响应头 `X-Request-ID` 回传；该请求内所有日志自动附带 request_id。自定义访问日志记录 method、path、status、duration_ms、request_id，替代 uvicorn 默认访问日志。未预期 500 以 ERROR 级别记录 request_id 与 traceback，响应体保持 PROJECT_SPEC 统一格式不变。
+
+worker 侧日志用 ARQ `job_id` 作为关联标识。
+
+日志禁止输出密钥、令牌、文档正文与消息正文。
+
+### 阶段 4 CI/CD 分支与触发矩阵
+
+分支模型：master 为稳定主干，dev 日常迭代，合并进 master 走 PR。
+
+Gitee Actions 触发矩阵（A 档）：push master = 全量门禁（ruff、pytest、eslint、prettier、typecheck、build）+ 构建并推送镜像（tag = 短 SHA 与 latest）；pull_request = 只跑门禁不推送镜像；push 其他分支不触发。
+
+### 阶段 4 自动部署与目标机器
+
+master 合并全绿后，CI 自动 SSH 到目标机执行 `git pull` → `docker compose pull && up -d`。SSH 私钥、服务器 IP、registry 凭据全部走 Gitee secrets，不落仓库、不落设置页。
+
+目标机器：腾讯云轻量服务器 2C4G5M（上海），Ubuntu 22.04 LTS + Docker 预装应用镜像。`PARSE_MAX_JOBS` 默认 2（worker 解析并发，可调）；不做容器内存限额；swap 与镜像加速器为部署建议项，写入 README。先以 HTTP 上线，nginx 预留 443 与证书挂载位，有域名后再补证书。
+
+阶段 4 增加的配置：`LOG_FORMAT`、`PARSE_MAX_JOBS`。
 
 ## 🟡 SHOULD
 
