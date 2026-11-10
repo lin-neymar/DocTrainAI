@@ -315,11 +315,11 @@ worker 侧日志用 ARQ `job_id` 作为关联标识。
 
 Gitee Go 触发矩阵（A 档，个人版适配）：门禁内建于镜像构建（server/web Dockerfile 的 RUN 阶段执行 ruff、pytest、eslint、prettier、typecheck，任一失败即镜像构建失败）。push master = 构建并推送镜像（tag = 构建号 ${GITEE_PIPELINE_BUILD_NUMBER} 与 latest）；pull_request = 构建并推送 PR 专属 tag（pr-${GITEE_PULL_ID}），不写 latest；push 其他分支不触发。注：个人版无云端 shell 执行能力（命令类插件报 agents not available），故门禁不放流水线步骤而内建进镜像构建。
 
-### 阶段 4 自动部署与目标机器
+### 阶段 4 部署与目标机器
 
-master 合并全绿后，CI 自动 SSH 到目标机执行 `git pull` → `docker compose pull && up -d`。SSH 私钥、服务器 IP、registry 凭据全部走 Gitee secrets，不落仓库、不落设置页。
+镜像驱动自动部署（个人版适配）：master 构建推送镜像到 ACR 后，目标机 cron 定时执行部署脚本 `docker compose pull`，latest 镜像 digest 变化时 `docker compose up -d` 滚动更新。服务器不开放 SSH 入站；不依赖 CI 主动 SSH（个人版无云端 shell/SSH 执行插件，与 shell 插件同堵 agents not available 墙）。
 
-目标机器：腾讯云轻量服务器 2C4G5M（广州），Ubuntu 22.04 LTS + Docker 预装应用镜像。`PARSE_MAX_JOBS` 默认 2（worker 解析并发，可调）；不做容器内存限额；swap 与镜像加速器为部署建议项，写入 README。先以 HTTP 上线，nginx 预留 443 与证书挂载位，有域名后再补证书。
+目标机器：腾讯云轻量服务器 2C4G5M（广州），Ubuntu 22.04 LTS + Docker 预装应用镜像。`PARSE_MAX_JOBS` 默认 2（worker 解析并发，可调）。内存策略：postgres 限额 1g、redis 限额 512m，api/worker/nginx 不设限额；swap 必做（4GB 内存补 4GB swap）。镜像加速器为部署建议项，写入 README。先以 HTTP 上线，nginx 预留 443 与证书挂载位，有域名后再补证书。
 
 阶段 4 增加的配置：`LOG_FORMAT`、`PARSE_MAX_JOBS`。
 
