@@ -3,6 +3,8 @@
 职责：创建 app 实例、挂载各 APIRouter、注册全局异常处理。
 启动：在 server/ 下激活 .venv 后执行 uvicorn app.main:app --reload
 """
+from contextlib import asynccontextmanager # 异步上下文管理器
+from typing import AsyncIterator # 异步迭代器
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,13 +23,24 @@ from app.api.system.user import router as user_router
 from app.config import settings
 from app.core.handlers import register_exception_handlers
 from app.core.logging import setup_logging
+from app.core.request_id import RequestIDMiddleware
 from app.core.response import success
 from app.services.ai_ext.integration import register_ai_ext_hooks
 
 # 阶段 4：结构化日志装配（幂等；LOG_FORMAT 未显式设置时随 APP_ENV 推导）
 setup_logging(settings.effective_log_format)
 
-app = FastAPI(title="DocTrainAI", version="0.1.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    # 阶段 4：在 lifespan 里再装配一次结构化日志。
+    # uvicorn 自身的 logging 配置与应用导入的先后顺序随版本而异，
+    # 幂等重跑保证我们的 formatter 与「摘除 uvicorn.access」一定最终生效。
+    setup_logging(settings.effective_log_format)
+    yield
+
+
+app = FastAPI(title="DocTrainAI", version="0.1.0", lifespan=lifespan)
+
 # 先注册异常处理，再挂路由，保证所有 endpoint 都走统一 { code, message, data }
 register_exception_handlers(app)
 
@@ -43,6 +56,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# 阶段 4：request_id 中间件（X-Request-ID 响应头 + 结构化访问日志）。
+# add_middleware 后加的包在外层：异常从路由抛出后先经过本中间件再到框架兜底。
+app.add_middleware(RequestIDMiddleware)
 
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")

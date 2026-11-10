@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.exceptions import AppException
+from app.core.logging import request_id_var
 
 logger = logging.getLogger(__name__)
 
@@ -84,13 +85,18 @@ def register_exception_handlers(app: FastAPI) -> None:
             status_code=status,
             content=_error_body(code=code, message=message, data=None),
         )
-
+    
     @app.exception_handler(Exception)
     # 实现：兜底未捕获异常 → 500
     def handle_unexpected_error(_request: Request, exc: Exception) -> JSONResponse:
         # 最后一道防线：不向客户端泄露内部异常信息
         logger.exception("Unhandled exception: %s", exc)
-        return JSONResponse(
+        response = JSONResponse(
             status_code=500,
             content=_error_body(code=50000, message="internal server error", data=None),
         )
+        # 阶段 4：500 响应也回传 request_id（中间件包不住最外层框架兜底的这条路径）
+        request_id = request_id_var.get()
+        if request_id != "-":
+            response.headers["X-Request-ID"] = request_id
+        return response

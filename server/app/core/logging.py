@@ -87,7 +87,9 @@ def setup_logging(fmt: str) -> None:
     root.addHandler(handler)
     root.setLevel(logging.INFO)
 
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+    for name in ("uvicorn", "uvicorn.error"):
         uvicorn_logger = logging.getLogger(name)
         uvicorn_logger.handlers = []
         uvicorn_logger.propagate = True
+    # 访问日志由阶段 4 中间件统一输出；摘除 uvicorn.access 避免双份
+    logging.getLogger("uvicorn.access").disabled = True
