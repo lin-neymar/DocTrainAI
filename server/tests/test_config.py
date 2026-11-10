@@ -1,6 +1,6 @@
 """配置加载测试（G2/C1：确认 .env 中的关键项被读取）。"""
 
-from app.config import settings
+from app.config import Settings, settings
 
 
 def test_database_url_loaded_from_env() -> None:
@@ -31,3 +31,10 @@ def test_file_upload_settings() -> None:
     assert settings.file_storage_path.is_absolute()
     assert "pdf" in settings.allowed_extension_list
     assert "md" in settings.allowed_extension_list
+
+def test_log_format_derived_from_app_env_and_overridable() -> None:
+    """阶段 4：LOG_FORMAT 缺省随 APP_ENV 推导（production=json，其余=text），可显式覆盖。"""
+    assert Settings(app_env="development").effective_log_format == "text"
+    assert Settings(app_env="production").effective_log_format == "json"
+    assert Settings(app_env="production", log_format="text").effective_log_format == "text"
+    assert Settings(app_env="development", log_format="JSON").effective_log_format == "json"

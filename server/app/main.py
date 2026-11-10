@@ -20,8 +20,12 @@ from app.api.system.settings import brand_router, theme_router
 from app.api.system.user import router as user_router
 from app.config import settings
 from app.core.handlers import register_exception_handlers
+from app.core.logging import setup_logging
 from app.core.response import success
 from app.services.ai_ext.integration import register_ai_ext_hooks
+
+# 阶段 4：结构化日志装配（幂等；LOG_FORMAT 未显式设置时随 APP_ENV 推导）
+setup_logging(settings.effective_log_format)
 
 app = FastAPI(title="DocTrainAI", version="0.1.0")
 # 先注册异常处理，再挂路由，保证所有 endpoint 都走统一 { code, message, data }
