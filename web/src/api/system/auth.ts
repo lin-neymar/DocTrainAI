@@ -16,10 +16,9 @@ export interface MeResult {
 
 // 实现：PUT /api/v1/auth/me/theme
 export function updateMyThemeApi(theme_primary: string | null) {
-  return request.put<unknown, { theme_primary: string | null }>(
-    '/api/v1/auth/me/theme',
-    { theme_primary },
-  )
+  return request.put<unknown, { theme_primary: string | null }>('/api/v1/auth/me/theme', {
+    theme_primary,
+  })
 }
 
 // 实现：POST /api/v1/auth/login

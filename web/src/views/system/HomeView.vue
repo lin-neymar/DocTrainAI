@@ -13,8 +13,7 @@ const userStore = useUserStore()
 <template>
   <ElCard class="panel" shadow="never">
     <p>
-      当前用户：<strong>{{ userStore.username }}</strong>
-      · 部门：{{ userStore.deptName }}
+      当前用户：<strong>{{ userStore.username }}</strong> · 部门：{{ userStore.deptName }}
     </p>
     <p class="label">角色（仅展示，鉴权不看角色名）</p>
     <div class="tags">

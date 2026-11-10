@@ -35,9 +35,7 @@ const selectedName = ref('')
 const canCreate = computed(() => hasPermission('dept:create'))
 const canUpdate = computed(() => hasPermission('dept:update'))
 const canDelete = computed(() => hasPermission('dept:delete'))
-const canCreateRoot = computed(
-  () => canCreate.value && hasPermission('data:scope:all'),
-)
+const canCreateRoot = computed(() => canCreate.value && hasPermission('data:scope:all'))
 
 const treeProps = { label: 'name', children: 'children' } as const
 
@@ -89,9 +87,7 @@ const parentOptions = computed(() => {
   return opts
 })
 
-const dialogTitle = computed(() =>
-  dialogMode.value === 'create' ? '新增部门' : '编辑部门',
-)
+const dialogTitle = computed(() => (dialogMode.value === 'create' ? '新增部门' : '编辑部门'))
 
 // 实现：拉取可见部门树（范围由后端决定）
 async function loadTree() {
@@ -219,12 +215,7 @@ onMounted(() => {
       </div>
       <div class="toolbar-right">
         <ElButton :loading="loading" @click="loadTree">刷新</ElButton>
-        <ElButton
-          v-if="canCreateRoot"
-          type="primary"
-          plain
-          @click="openCreate(null)"
-        >
+        <ElButton v-if="canCreateRoot" type="primary" plain @click="openCreate(null)">
           新增根部门
         </ElButton>
         <ElButton
@@ -235,16 +226,8 @@ onMounted(() => {
         >
           新增子部门
         </ElButton>
-        <ElButton v-if="canUpdate" :disabled="!selectedId" @click="openEdit">
-          编辑
-        </ElButton>
-        <ElButton
-          v-if="canDelete"
-          type="danger"
-          plain
-          :disabled="!selectedId"
-          @click="onDelete"
-        >
+        <ElButton v-if="canUpdate" :disabled="!selectedId" @click="openEdit"> 编辑 </ElButton>
+        <ElButton v-if="canDelete" type="danger" plain :disabled="!selectedId" @click="onDelete">
           删除
         </ElButton>
       </div>
@@ -302,9 +285,7 @@ onMounted(() => {
       </ElForm>
       <template #footer>
         <ElButton @click="dialogVisible = false">取消</ElButton>
-        <ElButton type="primary" :loading="dialogLoading" @click="onSubmit">
-          确定
-        </ElButton>
+        <ElButton type="primary" :loading="dialogLoading" @click="onSubmit"> 确定 </ElButton>
       </template>
     </ElDialog>
   </div>

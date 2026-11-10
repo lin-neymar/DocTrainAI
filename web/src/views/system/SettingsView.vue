@@ -5,14 +5,7 @@
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules, UploadFile, UploadRawFile } from 'element-plus'
-import {
-  ElButton,
-  ElForm,
-  ElFormItem,
-  ElInput,
-  ElMessage,
-  ElUpload,
-} from 'element-plus'
+import { ElButton, ElForm, ElFormItem, ElInput, ElMessage, ElUpload } from 'element-plus'
 
 import {
   brandLogoUrl,
@@ -52,9 +45,7 @@ const rules: FormRules<typeof form> = {
   ],
 }
 
-const logoSrc = computed(() =>
-  hasLogo.value ? `${brandLogoUrl()}?t=${logoBust.value}` : '',
-)
+const logoSrc = computed(() => (hasLogo.value ? `${brandLogoUrl()}?t=${logoBust.value}` : ''))
 
 watch(
   () => userStore.themePrimary,
@@ -165,12 +156,7 @@ onMounted(() => {
       <div class="theme-row">
         <label class="theme-picker">
           <span>主题色</span>
-          <input
-            type="color"
-            :value="themeDraft"
-            :disabled="themeSaving"
-            @change="onThemeChange"
-          />
+          <input type="color" :value="themeDraft" :disabled="themeSaving" @change="onThemeChange" />
           <code class="theme-hex">{{ themeDraft }}</code>
         </label>
         <ElButton :disabled="themeSaving" @click="onResetTheme">恢复默认</ElButton>
@@ -211,12 +197,7 @@ onMounted(() => {
               </ElUpload>
             </div>
           </ElFormItem>
-          <ElButton
-            v-if="canUpdateBrand"
-            type="primary"
-            :loading="saving"
-            @click="onSave"
-          >
+          <ElButton v-if="canUpdateBrand" type="primary" :loading="saving" @click="onSave">
             保存文案
           </ElButton>
           <p v-else class="field-tip">当前账号无 system:update，无法修改品牌</p>

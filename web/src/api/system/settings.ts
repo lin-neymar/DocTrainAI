@@ -16,10 +16,7 @@ export function fetchSettingsApi() {
   return request.get<unknown, BrandInfo>('/api/v1/system/settings')
 }
 
-export function updateSettingsApi(body: {
-  site_name: string
-  login_subtitle: string
-}) {
+export function updateSettingsApi(body: { site_name: string; login_subtitle: string }) {
   return request.put<unknown, BrandInfo>('/api/v1/system/settings', body)
 }
 

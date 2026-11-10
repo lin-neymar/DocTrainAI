@@ -12,10 +12,7 @@ export function canCustomizeAudience(): boolean {
 }
 
 // 实现：在部门树中定位节点
-export function findDeptNode(
-  nodes: DeptTreeNode[],
-  deptId: string,
-): DeptTreeNode | null {
+export function findDeptNode(nodes: DeptTreeNode[], deptId: string): DeptTreeNode | null {
   for (const n of nodes) {
     if (n.id === deptId) return n
     const found = findDeptNode(n.children, deptId)

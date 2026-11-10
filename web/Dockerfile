@@ -10,8 +10,8 @@ COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 
 COPY . .
-# 生产构建：VITE_API_BASE_URL 留空 = 同源 /api（由 nginx 反代）
-RUN npm run build
+# 阶段 4 门禁内建：lint + 格式校验 + 构建（build 含 vue-tsc typecheck），任一失败即镜像构建失败
+RUN npm run lint && npx prettier --check . && npm run build
 
 # ---------- 运行阶段 ----------
 FROM nginx:alpine

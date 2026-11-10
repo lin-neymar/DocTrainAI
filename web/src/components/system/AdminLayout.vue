@@ -16,10 +16,7 @@ import {
   ElMessageBox,
 } from 'element-plus'
 
-import {
-  brandLogoUrl,
-  fetchPublicBrandApi,
-} from '@/api/system/settings'
+import { brandLogoUrl, fetchPublicBrandApi } from '@/api/system/settings'
 import { useUserStore } from '@/stores/user'
 import { hasPermission } from '@/utils/permission'
 
@@ -56,9 +53,7 @@ const menuItems = computed(() => {
 
 const activeMenu = computed(() => route.path)
 
-const logoSrc = computed(() =>
-  brandHasLogo.value ? `${brandLogoUrl()}?t=${logoBust.value}` : '',
-)
+const logoSrc = computed(() => (brandHasLogo.value ? `${brandLogoUrl()}?t=${logoBust.value}` : ''))
 
 // 实现：拉取公开品牌用于侧栏展示名/Logo
 async function loadBrand() {

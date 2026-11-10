@@ -69,9 +69,7 @@ const formRules: FormRules<typeof form> = {
   ],
 }
 
-const dialogTitle = computed(() =>
-  dialogMode.value === 'create' ? '新增角色' : '编辑角色',
-)
+const dialogTitle = computed(() => (dialogMode.value === 'create' ? '新增角色' : '编辑角色'))
 
 // 实现：分页拉取角色列表
 async function loadRoles() {
@@ -218,13 +216,7 @@ onMounted(async () => {
 
     <div class="table-panel">
       <div class="table-scroll">
-        <ElTable
-          v-loading="loading"
-          height="100%"
-          :data="roles"
-          stripe
-          empty-text="暂无角色"
-        >
+        <ElTable v-loading="loading" height="100%" :data="roles" stripe empty-text="暂无角色">
           <ElTableColumn prop="code" label="code" min-width="140" />
           <ElTableColumn prop="name" label="名称" min-width="120" />
           <ElTableColumn label="权限码" min-width="280">
@@ -264,9 +256,7 @@ onMounted(async () => {
               >
                 编辑
               </ElButton>
-              <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">
-                删除
-              </ElButton>
+              <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)"> 删除 </ElButton>
             </template>
           </ElTableColumn>
         </ElTable>
