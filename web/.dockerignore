@@ -1,0 +1,5 @@
+# 阶段 4：web 镜像构建排除清单（构建上下文 = web/）
+node_modules/
+dist/
+.env
+.env.*
