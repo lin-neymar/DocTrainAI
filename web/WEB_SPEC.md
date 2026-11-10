@@ -5,31 +5,35 @@
 
 技术栈：Vue3、Vite、Element Plus、Pinia、Axios。界面语言为简体中文。
 
-## 📁 src 目录
+## 📁 目录
 
 ```
-src/
-├── api/
-│   ├── system/                 # auth、dept、user、role、doc、course、settings
-│   └── ai_ext/                 # 阶段 2+：解析状态、检索；阶段 3：对话
-├── stores/
-│   ├── user.ts                 # 当前用户与权限码的唯一存放处（可含 theme_primary）
-│   └── brand.ts                # 可选：全局品牌（T2/T3/T4）缓存
-├── router/
-│   ├── routes/system/
-│   └── routes/ai_ext/          # 阶段 3 才注册对话路由
-├── components/
-│   ├── common/
-│   ├── system/
-│   └── ai_ext/                 # 阶段 3：消息列表、引用卡片
-├── views/
-│   ├── system/                 # 登录、工作台、部门、用户、角色、文档、课程、系统设置
-│   └── ai_ext/                 # 阶段 3：对话页
-└── utils/
-    ├── permission.ts           # hasPermission
-    ├── request.ts              # Axios 实例与拦截器
-    ├── theme.ts                # 应用个人主题主色到 CSS 变量 / Element
-    └── sse.ts                  # 阶段 3：SSE 读取
+web/
+├── src/
+│   ├── api/
+│   │   ├── system/             # auth、dept、user、role、doc、course、settings
+│   │   └── ai_ext/             # 阶段 2+：解析状态、检索；阶段 3：对话
+│   ├── stores/
+│   │   ├── user.ts             # 当前用户与权限码的唯一存放处（可含 theme_primary）
+│   │   └── brand.ts            # 可选：全局品牌（T2/T3/T4）缓存
+│   ├── router/
+│   │   ├── routes/system/
+│   │   └── routes/ai_ext/      # 阶段 3 才注册对话路由
+│   ├── components/
+│   │   ├── common/
+│   │   ├── system/
+│   │   └── ai_ext/             # 阶段 3：消息列表、引用卡片
+│   ├── views/
+│   │   ├── system/             # 登录、工作台、部门、用户、角色、文档、课程、系统设置
+│   │   └── ai_ext/             # 阶段 3：对话页
+│   └── utils/
+│       ├── permission.ts       # hasPermission
+│       ├── request.ts          # Axios 实例与拦截器
+│       ├── theme.ts            # 应用个人主题主色到 CSS 变量 / Element
+│       └── sse.ts              # 阶段 3：SSE 读取
+├── Dockerfile                  # 阶段 4：node 构建 + nginx:alpine 托管 dist
+├── nginx.conf                  # 阶段 4：/api 反代、SSE 关缓冲、SPA fallback、443 预留
+└── .dockerignore               # 阶段 4：排除 node_modules、dist、本地 .env
 ```
 
 阶段 1 不创建 `ai_ext` 的路由、页面和组件。可以先留出空目录，也可以到阶段 2 再创建。两种做法以「里面没有业务代码」为准。
@@ -39,6 +43,8 @@ src/
 阶段 1：vue、vue-router、pinia、element-plus、axios、vite、eslint、prettier、typescript、vue-tsc，以及它们的官方配套插件。
 
 阶段 3 的流式请求使用浏览器原生流，不额外引入 SSE 框架。白名单外的包先确认。
+
+阶段 4 容器化只新增部署文件（Dockerfile、nginx.conf、.dockerignore），不新增 npm 依赖；nginx 是运行时镜像，不属于前端依赖。
 
 ## 🔴 MUST
 
@@ -90,6 +96,26 @@ SSE 的读取放在 `utils/sse.ts`。组件只消费已经解析好的 `delta`�
 4. 禁止在 `system` 页面实现对话、引用卡片和 SSE。
 5. 阶段 1 不做 Refresh Token，也不把令牌改成 Cookie。
 6. 禁止在系统设置页提供 JWT、CORS、数据库、上传大小白名单等部署项编辑。
+
+## 🔴 阶段 4
+
+阶段 4 只做交付能力，不改页面行为、不加 npm 依赖、不动接口封装。
+
+### 容器化
+
+- web 用多阶段 Dockerfile：node 镜像执行 `npm ci && npm run build` 产出 `dist/`，运行时用 `nginx:alpine` 托管 `dist/`。
+- `nginx.conf`：`/api` 反代到 api 容器（80 端口）；SSE 路径关闭缓冲与缓存并放宽读超时；SPA fallback 除 `/api` 外全部回落到 `index.html`；预留 443 与证书挂载位，有域名后再启用 HTTPS。
+- 新增 `.dockerignore`：排除 `node_modules`、`dist`、本地 `.env`。
+
+### CI 门禁
+
+web 侧门禁为 eslint、prettier、typecheck、build 四项，随触发矩阵执行（master 推送与 PR 跑门禁；master 推送另构建镜像）。
+
+### 环境变量与同源部署
+
+- 接口根地址只来自 Vite 环境变量（构建时注入），不写死；生产部署中 nginx 以 `/api` 同源反代，页面直接使用相对路径 `/api`。
+- 生产同源部署下浏览器与 API 同源，不需要 CORS 配置；CORS 仅服务于本地跨域开发。
+- 部署侧配置（JWT、数据库、上传白名单等）依然禁止做成设置页可改项。
 
 ## 阶段 1 路由权限
 
