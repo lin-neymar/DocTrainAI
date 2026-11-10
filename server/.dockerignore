@@ -1,0 +1,9 @@
+# 阶段 4：server 镜像构建排除清单（构建上下文 = server/）
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest_storage/
+.ruff_cache/
+tests/
+storage/

@@ -38,3 +38,7 @@ def test_log_format_derived_from_app_env_and_overridable() -> None:
     assert Settings(app_env="production").effective_log_format == "json"
     assert Settings(app_env="production", log_format="text").effective_log_format == "text"
     assert Settings(app_env="development", log_format="JSON").effective_log_format == "json"
+
+def test_parse_max_jobs_configured() -> None:
+    """阶段 4：worker 解析并发上限为正数（默认 2，可被环境变量覆盖）。"""
+    assert settings.parse_max_jobs >= 1

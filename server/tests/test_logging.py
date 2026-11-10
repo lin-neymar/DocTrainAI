@@ -86,8 +86,10 @@ def test_json_formatter_omits_job_id_when_unset() -> None:
 
 
 def test_worker_settings_import_and_setup() -> None:
-    """阶段 4：worker 入口可导入（结构化日志装配不炸），任务绑定不变。"""
+    """阶段 4：worker 入口可导入（结构化日志装配不炸），任务与并发绑定不变。"""
+    from app.config import settings
     from app.workers.settings import WorkerSettings
     from app.workers.tasks import parse_document
 
     assert WorkerSettings.functions == [parse_document]
+    assert WorkerSettings.max_jobs == settings.parse_max_jobs

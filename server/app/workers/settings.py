@@ -16,3 +16,5 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     # 任务函数抛异常时 ARQ 重入队的总尝试上限：首跑 1 次 + PARSE_MAX_RETRY 次重试
     max_tries = settings.parse_max_retry + 1
+    # 阶段 4：解析任务最大并发（PARSE_MAX_JOBS，默认 2，适配 2C4G 服务器）
+    max_jobs = settings.parse_max_jobs

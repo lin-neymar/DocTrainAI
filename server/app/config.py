@@ -114,6 +114,8 @@ class Settings(BaseSettings):
     # ---------- 阶段 4：交付 ----------
     # 日志格式 text | json；留空则随 APP_ENV 推导（production=json，其余=text），可显式覆盖
     log_format: str | None = None
+    # worker 解析任务最大并发（ARQ max_jobs）；2C4G 服务器默认 2，可按机器规格调整
+    parse_max_jobs: int = 2
 
     @property
     # 实现：LOG_FORMAT 显式取值 text/json；未设置时按 APP_ENV 推导
