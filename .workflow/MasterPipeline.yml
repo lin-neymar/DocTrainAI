@@ -1,0 +1,84 @@
+# Master 流水线（Gitee Go）。
+# push master 触发：全量门禁 + 构建推送镜像（tag = 短 SHA 与 latest）。
+# 凭证不写在本文件：REGISTRY_URL / REGISTRY_USERNAME / REGISTRY_PASSWORD
+# 在 Gitee Go「全局参数」中配置为机密类型（值 = 阿里云 ACR 访问凭证）。
+version: '1.0'
+name: master-pipeline
+displayName: Master 门禁与镜像
+
+triggers:
+  push:
+    branches:
+      precise:
+        - master
+
+stages:
+  - stage: gates
+    displayName: 全量门禁
+    steps:
+      - step: checkout@official-checkout
+        name: checkout
+        displayName: 检出代码
+
+      - step: shell@official-shell
+        name: server-gate
+        displayName: 后端门禁
+        commands:
+          - cd server
+          - python3 -m pip install -r requirements.txt --quiet
+          - python3 -m ruff check app tests
+          - python3 -m pytest -q
+
+      - step: shell@official-shell
+        name: web-gate
+        displayName: 前端门禁
+        commands:
+          - cd web
+          - npm ci
+          - npm run lint
+          - npx prettier --check .
+          - npm run build
+
+  - stage: images
+    displayName: 镜像构建与推送
+    steps:
+      - step: build@docker
+        name: server-image-sha
+        displayName: server 镜像（短 SHA）
+        repository: ${REGISTRY_URL}
+        username: ${REGISTRY_USERNAME}
+        password: ${REGISTRY_PASSWORD}
+        # tag 含「命名空间/镜像名:版本」；命名空间在 ACR 控制台创建
+        tag: doctrain/doctrain-server:${GITEE_COMMIT_SHORT}
+        dockerfile: ./server/Dockerfile
+        isCache: false
+
+      - step: build@docker
+        name: server-image-latest
+        displayName: server 镜像（latest）
+        repository: ${REGISTRY_URL}
+        username: ${REGISTRY_USERNAME}
+        password: ${REGISTRY_PASSWORD}
+        tag: doctrain/doctrain-server:latest
+        dockerfile: ./server/Dockerfile
+        isCache: false
+
+      - step: build@docker
+        name: web-image-sha
+        displayName: web 镜像（短 SHA）
+        repository: ${REGISTRY_URL}
+        username: ${REGISTRY_USERNAME}
+        password: ${REGISTRY_PASSWORD}
+        tag: doctrain/doctrain-web:${GITEE_COMMIT_SHORT}
+        dockerfile: ./web/Dockerfile
+        isCache: false
+
+      - step: build@docker
+        name: web-image-latest
+        displayName: web 镜像（latest）
+        repository: ${REGISTRY_URL}
+        username: ${REGISTRY_USERNAME}
+        password: ${REGISTRY_PASSWORD}
+        tag: doctrain/doctrain-web:latest
+        dockerfile: ./web/Dockerfile
+        isCache: false
