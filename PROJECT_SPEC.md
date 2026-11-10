@@ -61,4 +61,4 @@
 - 前端检查：Prettier、ESLint
 - 迁移：Alembic
 - 编排：Docker Compose，文件名为仓库根目录的 `compose.yaml`
-- CI：Gitee Actions，阶段 4 实现
+- CI：Gitee Go 流水线，阶段 4 实现

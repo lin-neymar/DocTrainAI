@@ -37,7 +37,7 @@
 
 - 阶段 2：异步解析、分片、向量化（多格式 Loader 经同一存储抽象读原件）。PostgreSQL 全文检索与 pgvector 两路合并。检索前先取当前用户可见文档。评估脚本输出 Recall@5。可补 S3 兼容存储实现与本地迁云脚本。
 - 阶段 3：LangGraph 单 Agent、多轮记忆、SSE、原文引用。相关度不足时拒答。文档内容视为不可信资料。调用日志记录片段、模型和耗时。评估补上引用命中和拒答用例。
-- 阶段 4：完整 Compose 编排、环境隔离、结构化日志、Gitee Actions 的检查与镜像构建。具备目标机器后再打开自动部署。
+- 阶段 4：完整 Compose 编排、环境隔离、结构化日志、Gitee Go 流水线的门禁与镜像构建。具备目标机器后再打开自动部署。
 
 ### 明确不交付
 
@@ -89,7 +89,7 @@ DocTrainAI/
 - 阶段 2：LangChain 只用于加载、切分、Embedding；jieba 为中文全文检索分词；ARQ + Redis 做解析队列；Redis 不存放业务数据
 - 阶段 3：LangGraph 做单 Agent 编排。对话与 Embedding 走可配置的通义千问兼容接口
 - 前端：Vue3、Vite、Element Plus、Pinia、Axios
-- 工具：ruff、Prettier、ESLint、Docker Compose、Gitee Actions
+- 工具：ruff、Prettier、ESLint、Docker Compose、Gitee Go
 
 密钥、连接串、模型地址只来自环境变量。
 
