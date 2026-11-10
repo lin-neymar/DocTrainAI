@@ -5,7 +5,7 @@
 
 ## 🔴 MUST
 
-1. 业务代码只放在 `server/` 和 `web/`。worker 放在 `server/app/workers/`。根目录只允许规约、README、`.gitignore`、`.env.example`、`compose.yaml`，以及阶段 4 的 `.gitee/workflows/`（Gitee Go 流水线约定目录）。
+1. 业务代码只放在 `server/` 和 `web/`。worker 放在 `server/app/workers/`。根目录只允许规约、README、`.gitignore`、`.env.example`、`compose.yaml`，以及阶段 4 的 `.workflow/`（Gitee Go 流水线约定目录）。
 2. 这是模块化单体。目录 `system` 与 `ai_ext` 分离。底座不导入 AI 代码，AI 不改底座表来存放解析或对话数据。
 3. 表结构变更一律使用 Alembic 迁移。
 4. 密钥、连接串、模型地址、**文件存储后端与凭据**（本地目录或对象存储）由环境变量注入。仓库只提交 `.env.example`。`.gitignore` 必须忽略 `.env`、虚拟环境、上传文件、`__pycache__` 和前端构建产物。
