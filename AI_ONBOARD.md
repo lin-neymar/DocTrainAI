@@ -67,7 +67,7 @@
 
 ## 目录
 
-业务代码只放在这两个目录。根目录允许规约、README、`.gitignore`、`.env.example`、`compose.yaml`。阶段 4 允许增加 `.gitee/workflows/`。除此之外，新的顶层目录必须先确认。
+业务代码只放在这两个目录。根目录允许规约、README、`.gitignore`、`.env.example`、`compose.yaml`。阶段 4 允许增加 `.gitee/workflows/`（Gitee Go 流水线目录，非 GitHub 式 `.gitee/workflows/`）。除此之外，新的顶层目录必须先确认。
 
 ```
 DocTrainAI/
