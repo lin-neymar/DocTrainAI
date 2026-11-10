@@ -12,21 +12,19 @@ stages:
   - stage: gates
     displayName: 全量门禁
     steps:
-      - step: shell@container
+      - step: build@ci
         name: server-gate
         displayName: 后端门禁
-        image: python:3.11
-        script: |
+        commands: |
           cd server
           python3 -m pip install -r requirements.txt --quiet
           python3 -m ruff check app tests
           python3 -m pytest -q
 
-      - step: shell@container
+      - step: build@ci
         name: web-gate
         displayName: 前端门禁
-        image: node:18
-        script: |
+        commands: |
           cd web
           npm ci
           npm run lint
