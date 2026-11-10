@@ -20,8 +20,18 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 再拷应用代码（.dockerignore 已排除 .venv/缓存/测试/本地存储）
+# 再拷应用代码（.dockerignore 已排除 .venv/缓存/本地存储，tests 保留用于构建期门禁）
 COPY . .
+
+# 阶段 4 门禁内建：构建即校验（ruff 静态检查 + pytest）
+# 构建上下文无 .env：注入 CI 占位值满足 Settings 四个必填字段（database_url/init_admin_*/jwt_secret），
+# 真实密钥只在运行期由 compose 注入；conftest 连不上占位库时自动降级，DB 用例 skip
+RUN ruff check app tests \
+    && DATABASE_URL=postgresql+psycopg://ci:ci@127.0.0.1:5432/ci_doctrain \
+       INIT_ADMIN_USERNAME=ci-admin \
+       INIT_ADMIN_PASSWORD=ci-placeholder-password \
+       JWT_SECRET=ci-placeholder-secret-not-for-production \
+       python3 -m pytest -q
 
 # 入口：alembic upgrade head + 幂等 seed 后 exec 传入命令（首参 worker 时跳过迁移）
 ENTRYPOINT ["./docker-entrypoint.sh"]

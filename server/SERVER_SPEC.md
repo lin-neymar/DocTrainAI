@@ -313,7 +313,7 @@ worker 侧日志用 ARQ `job_id` 作为关联标识。
 
 分支模型：master 为稳定主干，dev 日常迭代，合并进 master 走 PR。
 
-Gitee Actions 触发矩阵（A 档）：push master = 全量门禁（ruff、pytest、eslint、prettier、typecheck、build）+ 构建并推送镜像（tag = 短 SHA 与 latest）；pull_request = 只跑门禁不推送镜像；push 其他分支不触发。
+Gitee Go 触发矩阵（A 档，个人版适配）：门禁内建于镜像构建（server/web Dockerfile 的 RUN 阶段执行 ruff、pytest、eslint、prettier、typecheck，任一失败即镜像构建失败）。push master = 构建并推送镜像（tag = 构建号 ${GITEE_PIPELINE_BUILD_NUMBER} 与 latest）；pull_request = 构建并推送 PR 专属 tag（pr-${GITEE_PULL_ID}），不写 latest；push 其他分支不触发。注：个人版无云端 shell 执行能力（命令类插件报 agents not available），故门禁不放流水线步骤而内建进镜像构建。
 
 ### 阶段 4 自动部署与目标机器
 

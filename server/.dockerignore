@@ -5,5 +5,5 @@ __pycache__/
 .pytest_cache/
 .pytest_storage/
 .ruff_cache/
-tests/
+# tests/ 进入构建上下文：阶段 4 门禁内建，镜像构建期跑 ruff + pytest
 storage/
