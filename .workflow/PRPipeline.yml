@@ -1,5 +1,3 @@
-# PR 门禁流水线（Gitee Go）。
-# pull_request 触发；只跑门禁不构建镜像、不涉及任何凭证。
 version: '1.0'
 name: pr-pipeline
 displayName: PR 门禁
@@ -14,26 +12,23 @@ stages:
   - stage: gates
     displayName: 全量门禁
     steps:
-      # 注意：Gitee Go 自动拉取触发分支代码到工作区，无需 checkout 步骤
-
-      # 后端：ruff 静态检查 + pytest
-      # 无 Postgres 时 DB 用例按 conftest 设计自动降级 skip（非失败），见 SERVER_SPEC 测试库规约
       - step: shell@container
         name: server-gate
         displayName: 后端门禁
-        commands:
-          - cd server
-          - python3 -m pip install -r requirements.txt --quiet
-          - python3 -m ruff check app tests
-          - python3 -m pytest -q
+        image: python:3.11
+        script: |
+          cd server
+          python3 -m pip install -r requirements.txt --quiet
+          python3 -m ruff check app tests
+          python3 -m pytest -q
 
-      # 前端：eslint + prettier 校验 + typecheck + 产物构建
       - step: shell@container
         name: web-gate
         displayName: 前端门禁
-        commands:
-          - cd web
-          - npm ci
-          - npm run lint
-          - npx prettier --check .
-          - npm run build
+        image: node:18
+        script: |
+          cd web
+          npm ci
+          npm run lint
+          npx prettier --check .
+          npm run build

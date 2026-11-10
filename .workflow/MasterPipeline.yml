@@ -1,12 +1,3 @@
-# Master 流水线（Gitee Go）。
-# push master 触发：全量门禁 + 构建推送镜像（tag = 短 SHA 与 latest）。
-#
-# 凭证说明（个人账号已查实官方机制，见 gitee.com/help/articles/4377）：
-#   方案 C（首选）：头像 → 设置 → 流水线/Gitee Go → 凭证管理 → 新建「Docker 仓库」
-#     凭证（值 = ACR 独立访问凭证），Gitee 颁发令牌供流水线引用，密码不落库不落 YAML。
-#     建好后在镜像构建任务表单里选择该凭证（若需 YAML 字段，实测后定型）。
-#   方案 B（兜底）：在下方 variables 填 ACR「独立访问凭证」，
-#     明文入库——仓库必须保持私有；凭证泄露时在 ACR 控制台单独吊销。
 version: '1.0'
 name: master-pipeline
 displayName: Master 门禁与镜像
@@ -26,35 +17,34 @@ stages:
   - stage: gates
     displayName: 全量门禁
     steps:
-      # 注意：Gitee Go 自动拉取触发分支代码到工作区，无需 checkout 步骤
-
       - step: shell@container
         name: server-gate
         displayName: 后端门禁
-        commands:
-          - cd server
-          - python3 -m pip install -r requirements.txt --quiet
-          - python3 -m ruff check app tests
-          - python3 -m pytest -q
+        image: python:3.11
+        script: |
+          cd server
+          python3 -m pip install -r requirements.txt --quiet
+          python3 -m ruff check app tests
+          python3 -m pytest -q
 
       - step: shell@container
         name: web-gate
         displayName: 前端门禁
-        commands:
-          - cd web
-          - npm ci
-          - npm run lint
-          - npx prettier --check .
-          - npm run build
+        image: node:18
+        script: |
+          cd web
+          npm ci
+          npm run lint
+          npx prettier --check .
+          npm run build
 
-      # 派生短 SHA 到流水线参数（社区版系统变量无 GITEE_SHORT_COMMIT，
-      # 官方推荐经 GITEE_PARAMS 文件传递自定义参数；git 不可用时退 GITEE_COMMIT）
       - step: shell@container
         name: derive-short-commit
         displayName: 派生短 SHA
-        commands:
-          - SHORT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "${GITEE_COMMIT:0:7}")
-          - echo "TAG_SHA=${SHORT_COMMIT}" >> GITEE_PARAMS
+        image: ubuntu:22.04
+        script: |
+          SHORT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "${GITEE_COMMIT:0:7}")
+          echo "TAG_SHA=${SHORT_COMMIT}" >> GITEE_PARAMS
 
   - stage: images
     displayName: 镜像构建与推送
@@ -65,7 +55,6 @@ stages:
         repository: ${REGISTRY_URL}
         username: ${REGISTRY_USERNAME}
         password: ${REGISTRY_PASSWORD}
-        # tag 含「命名空间/镜像名:版本」；命名空间在 ACR 控制台创建
         tag: doctrain/doctrain-server:${TAG_SHA}
         dockerfile: ./server/Dockerfile
         isCache: false
