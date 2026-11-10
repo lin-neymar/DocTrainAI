@@ -18,7 +18,7 @@ stages:
 
       # 后端：ruff 静态检查 + pytest
       # 无 Postgres 时 DB 用例按 conftest 设计自动降级 skip（非失败），见 SERVER_SPEC 测试库规约
-      - step: shell@official-shell
+      - step: shell@agent
         name: server-gate
         displayName: 后端门禁
         commands:
@@ -28,7 +28,7 @@ stages:
           - python3 -m pytest -q
 
       # 前端：eslint + prettier 校验 + typecheck + 产物构建
-      - step: shell@official-shell
+      - step: shell@agent
         name: web-gate
         displayName: 前端门禁
         commands:

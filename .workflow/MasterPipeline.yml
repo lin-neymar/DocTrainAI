@@ -28,7 +28,7 @@ stages:
     steps:
       # 注意：Gitee Go 自动拉取触发分支代码到工作区，无需 checkout 步骤
 
-      - step: shell@official-shell
+      - step: shell@agent
         name: server-gate
         displayName: 后端门禁
         commands:
@@ -37,7 +37,7 @@ stages:
           - python3 -m ruff check app tests
           - python3 -m pytest -q
 
-      - step: shell@official-shell
+      - step: shell@agent
         name: web-gate
         displayName: 前端门禁
         commands:
@@ -49,7 +49,7 @@ stages:
 
       # 派生短 SHA 到流水线参数（社区版系统变量无 GITEE_SHORT_COMMIT，
       # 官方推荐经 GITEE_PARAMS 文件传递自定义参数；git 不可用时退 GITEE_COMMIT）
-      - step: shell@official-shell
+      - step: shell@agent
         name: derive-short-commit
         displayName: 派生短 SHA
         commands:
