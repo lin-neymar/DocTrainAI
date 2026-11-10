@@ -1,6 +1,19 @@
+# PR 门禁流水线（Gitee Go）。
+# pull_request 触发：门禁内建于镜像构建（server/web 的 Dockerfile RUN 阶段执行
+# ruff/pytest/eslint/prettier/typecheck，构建即校验），镜像推送 PR 专属 tag
+# （pr-${GITEE_PULL_ID}），不写 latest、不动生产 tag。
+# 说明：个人版无云端 shell 执行能力（命令类插件报 agents not available），
+# 故门禁内建进镜像构建；平台自动拉取代码，无需 checkout。
+#
+# 凭证说明（同 MasterPipeline 注释）：方案 C（凭证管理，首选）/ 方案 B（variables 明文，兜底）。
 version: '1.0'
 name: pr-pipeline
 displayName: PR 门禁
+
+variables:
+  REGISTRY_URL: registry.cn-shenzhen.aliyuncs.com
+  REGISTRY_USERNAME: change-me
+  REGISTRY_PASSWORD: change-me
 
 triggers:
   pr:
@@ -10,23 +23,24 @@ triggers:
 
 stages:
   - stage: gates
-    displayName: 全量门禁
+    displayName: 门禁（内建镜像构建）
     steps:
-      - step: build@ci
+      - step: build@docker
         name: server-gate
-        displayName: 后端门禁
-        commands: |
-          cd server
-          python3 -m pip install -r requirements.txt --quiet
-          python3 -m ruff check app tests
-          python3 -m pytest -q
+        displayName: server 门禁（构建即校验）
+        repository: ${REGISTRY_URL}
+        username: ${REGISTRY_USERNAME}
+        password: ${REGISTRY_PASSWORD}
+        tag: doctrain/doctrain-server:pr-${GITEE_PULL_ID}
+        dockerfile: ./server/Dockerfile
+        isCache: false
 
-      - step: build@ci
+      - step: build@docker
         name: web-gate
-        displayName: 前端门禁
-        commands: |
-          cd web
-          npm ci
-          npm run lint
-          npx prettier --check .
-          npm run build
+        displayName: web 门禁（构建即校验）
+        repository: ${REGISTRY_URL}
+        username: ${REGISTRY_USERNAME}
+        password: ${REGISTRY_PASSWORD}
+        tag: doctrain/doctrain-web:pr-${GITEE_PULL_ID}
+        dockerfile: ./web/Dockerfile
+        isCache: false

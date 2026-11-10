@@ -1,3 +1,15 @@
+# Master 流水线（Gitee Go）。
+# push master 触发：门禁内建于镜像构建（server/web 的 Dockerfile RUN 阶段执行
+# ruff/pytest/eslint/prettier/typecheck，构建即校验），构建并推送镜像
+# （tag = 构建号 ${GITEE_PIPELINE_BUILD_NUMBER} 与 latest）。
+# 说明：个人版无云端 shell 执行能力（命令类插件报 agents not available），
+# 故门禁不放流水线步骤而内建进镜像构建；平台自动拉取代码，无需 checkout。
+#
+# 凭证说明（官方机制 gitee.com/help/articles/4377）：
+#   方案 C（首选）：头像 → 设置 → 流水线/Gitee Go → 凭证管理 → 新建「docker registry」
+#     凭证（值 = ACR 独立访问凭证），构建任务表单里选择该凭证，密码不落库不落 YAML。
+#   方案 B（兜底）：在下方 variables 填 ACR「独立访问凭证」，
+#     明文入库——仓库必须保持私有；凭证泄露时在 ACR 控制台单独吊销。
 version: '1.0'
 name: master-pipeline
 displayName: Master 门禁与镜像
@@ -14,45 +26,16 @@ triggers:
         - master
 
 stages:
-  - stage: gates
-    displayName: 全量门禁
-    steps:
-      - step: build@ci
-        name: server-gate
-        displayName: 后端门禁
-        commands: |
-          cd server
-          python3 -m pip install -r requirements.txt --quiet
-          python3 -m ruff check app tests
-          python3 -m pytest -q
-
-      - step: build@ci
-        name: web-gate
-        displayName: 前端门禁
-        commands: |
-          cd web
-          npm ci
-          npm run lint
-          npx prettier --check .
-          npm run build
-
-      - step: build@ci
-        name: derive-short-commit
-        displayName: 派生短 SHA
-        commands: |
-          SHORT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "${GITEE_COMMIT:0:7}")
-          echo "TAG_SHA=${SHORT_COMMIT}" >> GITEE_PARAMS
-
   - stage: images
     displayName: 镜像构建与推送
     steps:
       - step: build@docker
-        name: server-image-sha
-        displayName: server 镜像（短 SHA）
+        name: server-image-build
+        displayName: server 镜像（构建号）
         repository: ${REGISTRY_URL}
         username: ${REGISTRY_USERNAME}
         password: ${REGISTRY_PASSWORD}
-        tag: doctrain/doctrain-server:${TAG_SHA}
+        tag: doctrain/doctrain-server:${GITEE_PIPELINE_BUILD_NUMBER}
         dockerfile: ./server/Dockerfile
         isCache: false
 
@@ -67,12 +50,12 @@ stages:
         isCache: false
 
       - step: build@docker
-        name: web-image-sha
-        displayName: web 镜像（短 SHA）
+        name: web-image-build
+        displayName: web 镜像（构建号）
         repository: ${REGISTRY_URL}
         username: ${REGISTRY_USERNAME}
         password: ${REGISTRY_PASSWORD}
-        tag: doctrain/doctrain-web:${TAG_SHA}
+        tag: doctrain/doctrain-web:${GITEE_PIPELINE_BUILD_NUMBER}
         dockerfile: ./web/Dockerfile
         isCache: false
 
