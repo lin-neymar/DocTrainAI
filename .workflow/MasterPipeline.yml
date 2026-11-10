@@ -1,10 +1,20 @@
 # Master 流水线（Gitee Go）。
 # push master 触发：全量门禁 + 构建推送镜像（tag = 短 SHA 与 latest）。
-# 凭证不写在本文件：REGISTRY_URL / REGISTRY_USERNAME / REGISTRY_PASSWORD
-# 在 Gitee Go「全局参数」中配置为机密类型（值 = 阿里云 ACR 访问凭证）。
+#
+# 凭证说明（个人账号已查实官方机制，见 gitee.com/help/articles/4377）：
+#   方案 C（首选）：头像 → 设置 → 流水线/Gitee Go → 凭证管理 → 新建「Docker 仓库」
+#     凭证（值 = ACR 独立访问凭证），Gitee 颁发令牌供流水线引用，密码不落库不落 YAML。
+#     建好后在镜像构建任务表单里选择该凭证（若需 YAML 字段，实测后定型）。
+#   方案 B（兜底）：在下方 variables 填 ACR「独立访问凭证」，
+#     明文入库——仓库必须保持私有；凭证泄露时在 ACR 控制台单独吊销。
 version: '1.0'
 name: master-pipeline
 displayName: Master 门禁与镜像
+
+variables:
+  REGISTRY_URL: registry.cn-shenzhen.aliyuncs.com
+  REGISTRY_USERNAME: change-me
+  REGISTRY_PASSWORD: change-me
 
 triggers:
   push:
@@ -39,6 +49,14 @@ stages:
           - npx prettier --check .
           - npm run build
 
+      # 派生短 SHA 到流水线参数（社区版系统变量无 GITEE_SHORT_COMMIT，
+      # 官方推荐经 GITEE_PARAMS 文件传递自定义参数）
+      - step: shell@official-shell
+        name: derive-short-commit
+        displayName: 派生短 SHA
+        commands:
+          - echo "TAG_SHA=$(git rev-parse --short HEAD)" >> GITEE_PARAMS
+
   - stage: images
     displayName: 镜像构建与推送
     steps:
@@ -49,7 +67,7 @@ stages:
         username: ${REGISTRY_USERNAME}
         password: ${REGISTRY_PASSWORD}
         # tag 含「命名空间/镜像名:版本」；命名空间在 ACR 控制台创建
-        tag: doctrain/doctrain-server:${GITEE_COMMIT_SHORT}
+        tag: doctrain/doctrain-server:${TAG_SHA}
         dockerfile: ./server/Dockerfile
         isCache: false
 
@@ -69,7 +87,7 @@ stages:
         repository: ${REGISTRY_URL}
         username: ${REGISTRY_USERNAME}
         password: ${REGISTRY_PASSWORD}
-        tag: doctrain/doctrain-web:${GITEE_COMMIT_SHORT}
+        tag: doctrain/doctrain-web:${TAG_SHA}
         dockerfile: ./web/Dockerfile
         isCache: false
 
