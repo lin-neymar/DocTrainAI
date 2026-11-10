@@ -26,9 +26,7 @@ stages:
   - stage: gates
     displayName: 全量门禁
     steps:
-      - step: checkout@official-checkout
-        name: checkout
-        displayName: 检出代码
+      # 注意：Gitee Go 自动拉取触发分支代码到工作区，无需 checkout 步骤
 
       - step: shell@official-shell
         name: server-gate
@@ -50,12 +48,13 @@ stages:
           - npm run build
 
       # 派生短 SHA 到流水线参数（社区版系统变量无 GITEE_SHORT_COMMIT，
-      # 官方推荐经 GITEE_PARAMS 文件传递自定义参数）
+      # 官方推荐经 GITEE_PARAMS 文件传递自定义参数；git 不可用时退 GITEE_COMMIT）
       - step: shell@official-shell
         name: derive-short-commit
         displayName: 派生短 SHA
         commands:
-          - echo "TAG_SHA=$(git rev-parse --short HEAD)" >> GITEE_PARAMS
+          - SHORT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "${GITEE_COMMIT:0:7}")
+          - echo "TAG_SHA=${SHORT_COMMIT}" >> GITEE_PARAMS
 
   - stage: images
     displayName: 镜像构建与推送

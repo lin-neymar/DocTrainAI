@@ -14,9 +14,7 @@ stages:
   - stage: gates
     displayName: 全量门禁
     steps:
-      - step: checkout@official-checkout
-        name: checkout
-        displayName: 检出代码
+      # 注意：Gitee Go 自动拉取触发分支代码到工作区，无需 checkout 步骤
 
       # 后端：ruff 静态检查 + pytest
       # 无 Postgres 时 DB 用例按 conftest 设计自动降级 skip（非失败），见 SERVER_SPEC 测试库规约
