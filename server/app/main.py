@@ -3,8 +3,8 @@
 职责：创建 app 实例、挂载各 APIRouter、注册全局异常处理。
 启动：在 server/ 下激活 .venv 后执行 uvicorn app.main:app --reload
 """
-from contextlib import asynccontextmanager # 异步上下文管理器
-from typing import AsyncIterator # 异步迭代器
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

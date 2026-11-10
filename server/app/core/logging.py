@@ -17,6 +17,9 @@ from datetime import datetime, timezone
 # 当前请求的 request_id：阶段 4 中间件写入，formatter 读取；无请求上下文时保持 "-"
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
 
+# 当前 ARQ job 的 job_id：worker 任务函数绑定，formatter 读取；API 进程恒为 "-"
+job_id_var: ContextVar[str] = ContextVar("job_id", default="-")
+
 # LogRecord 自带属性：extra 传入的自定义字段不在此列，将透传到 JSON
 _RESERVED_ATTRS = frozenset(
     {
@@ -27,7 +30,10 @@ _RESERVED_ATTRS = frozenset(
     }
 )
 
-TEXT_FORMAT = "%(asctime)s %(levelname)-8s [%(name)s] request_id=%(request_id)s %(message)s"
+TEXT_FORMAT = (
+    "%(asctime)s %(levelname)-8s [%(name)s] "
+    "request_id=%(request_id)s job_id=%(job_id)s %(message)s"
+)
 
 
 class JsonFormatter(logging.Formatter):
@@ -43,6 +49,9 @@ class JsonFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
         request_id = request_id_var.get()
+        job_id = job_id_var.get()
+        if job_id != "-":
+            payload["job_id"] = job_id
         if request_id != "-":
             payload["request_id"] = request_id
         for key, value in record.__dict__.items():
@@ -58,6 +67,7 @@ class TextFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         record.request_id = request_id_var.get()
+        record.job_id = job_id_var.get()
         return super().format(record)
 
 

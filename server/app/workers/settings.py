@@ -5,8 +5,11 @@
 from arq.connections import RedisSettings
 
 from app.config import settings
+from app.core.logging import setup_logging
 from app.workers.tasks import parse_document
 
+# 阶段 4：worker 进程与 api 同款结构化日志（text/json 随 LOG_FORMAT；幂等）
+setup_logging(settings.effective_log_format)
 
 class WorkerSettings:
     functions = [parse_document]

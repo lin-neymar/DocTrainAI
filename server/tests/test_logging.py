@@ -4,7 +4,13 @@ import json
 import logging
 import sys
 
-from app.core.logging import JsonFormatter, TextFormatter, request_id_var, setup_logging
+from app.core.logging import (
+    JsonFormatter,
+    TextFormatter,
+    job_id_var,
+    request_id_var,
+    setup_logging,
+)
 
 
 def _record(level: int, msg: str, args: tuple = (), exc_info=None) -> logging.LogRecord:
@@ -64,3 +70,24 @@ def test_setup_logging_idempotent() -> None:
     after = list(logging.getLogger().handlers)
     assert len(after) == len(before)  # 第三方（pytest 等）handler 不受影响
     assert sum(1 for h in after if getattr(h, "_doctrain", False)) == 1  # 自家只有一份
+
+def test_json_formatter_attaches_job_id() -> None:
+    token = job_id_var.set("job-42")
+    try:
+        payload = json.loads(JsonFormatter().format(_record(logging.INFO, "解析中")))
+        assert payload["job_id"] == "job-42"
+    finally:
+        job_id_var.reset(token)
+
+
+def test_json_formatter_omits_job_id_when_unset() -> None:
+    payload = json.loads(JsonFormatter().format(_record(logging.INFO, "无任务上下文")))
+    assert "job_id" not in payload
+
+
+def test_worker_settings_import_and_setup() -> None:
+    """阶段 4：worker 入口可导入（结构化日志装配不炸），任务绑定不变。"""
+    from app.workers.settings import WorkerSettings
+    from app.workers.tasks import parse_document
+
+    assert WorkerSettings.functions == [parse_document]
