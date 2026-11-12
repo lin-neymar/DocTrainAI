@@ -1,5 +1,5 @@
 # 阶段 4：web 镜像（多阶段：node 构建 → nginx:alpine 托管 dist）
-# 构建上下文 = 仓库根目录（Gitee Go build@docker 固定根目录上下文；本地：docker build -f web/Dockerfile .）
+# 构建上下文 = 仓库根目录（本地：docker build -f web/Dockerfile .；Jenkins 流水线同样以根目录为上下文）
 # 平台固定 amd64：云端构建机与服务器均为 amd64；基础镜像托管在 ACR 的 -amd64 单平台 tag
 
 # ---------- 构建阶段 ----------

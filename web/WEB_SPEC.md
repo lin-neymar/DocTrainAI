@@ -109,7 +109,7 @@ SSE 的读取放在 `utils/sse.ts`。组件只消费已经解析好的 `delta`�
 
 ### CI 门禁
 
-web 侧门禁为 eslint、prettier、typecheck、build 四项，内建于 Dockerfile 构建阶段（构建即校验）。push master = 构建并推送镜像（构建号与 latest tag）；pull_request = 构建并推送 PR 专属 tag（pr-${GITEE_PULL_ID}），不写 latest；push 其他分支不触发。
+web 侧门禁为 eslint、prettier、typecheck、build 四项，内建于 Dockerfile 构建阶段（构建即校验）。push master = 构建并推送镜像（构建号与 latest tag）；MR/PR = 构建并推送 PR 专属 tag（pr-${CHANGE_ID}，Jenkins Multibranch 场景），不写 latest；push 其他分支不触发。
 
 ### 环境变量与同源部署
 

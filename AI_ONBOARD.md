@@ -37,7 +37,7 @@
 
 - 阶段 2：异步解析、分片、向量化（多格式 Loader 经同一存储抽象读原件）。PostgreSQL 全文检索与 pgvector 两路合并。检索前先取当前用户可见文档。评估脚本输出 Recall@5。可补 S3 兼容存储实现与本地迁云脚本。
 - 阶段 3：LangGraph 单 Agent、多轮记忆、SSE、原文引用。相关度不足时拒答。文档内容视为不可信资料。调用日志记录片段、模型和耗时。评估补上引用命中和拒答用例。
-- 阶段 4：完整 Compose 编排、环境隔离、结构化日志、Gitee Go 流水线的门禁与镜像构建。具备目标机器后启用镜像驱动自动部署（服务器 cron 轮询 ACR 滚动更新）。
+- 阶段 4：完整 Compose 编排、环境隔离、结构化日志、Jenkins 流水线（自建构建机）的门禁与镜像构建：push 触发构建、推送 ACR、滚动部署。CI 门禁内建于镜像构建（server 镜像 RUN 阶段跑 ruff/pytest，web 镜像跑 eslint/prettier/typecheck，任一失败即构建失败）。
 
 ### 明确不交付
 
@@ -63,17 +63,18 @@
 
 阶段 3 已完成（智能对话）：LangGraph 单 Agent、多轮记忆、SSE 流式、引用卡片、拒答、调用日志、会话软删除、40 条评测集三指标 100%。
 
-阶段 4 进行中：
+阶段 4 进行中：容器化（双 Dockerfile + entrypoint + .dockerignore）、Compose 编排、结构化日志已完成；CI/CD 原 Gitee Go 方案因月度配额耗尽废弃，改为服务器自建 Jenkins（apt 直装 + 宿主 docker），流水线按新会话的步骤计划重建。
 
 ## 目录
 
-业务代码只放在这两个目录。根目录允许规约、README、`.gitignore`、`.env.example`、`compose.yaml`。阶段 4 允许增加 `.workflow/`（Gitee Go 流水线目录，非 GitHub 式 `.gitee/workflows/`）。除此之外，新的顶层目录必须先确认。
+业务代码只放在这两个目录。根目录允许规约、README、`.gitignore`、`.env.example`、`compose.yaml`。阶段 4 允许增加 `Jenkinsfile`（Jenkins 声明式流水线，仓库根目录，纳入 Git 管理）。除此之外，新的顶层目录必须先确认。
 
 ```
 DocTrainAI/
 ├── server/             # FastAPI
 ├── web/                # Vue3
 ├── compose.yaml        # 阶段 1 仅 postgres；后续阶段往同一文件加服务
+├── Jenkinsfile         # 阶段 4 Jenkins 声明式流水线（构建门禁、镜像推送、滚动部署）
 ├── .env.example
 ├── PROJECT_SPEC.md
 ├── AI_ONBOARD.md
@@ -89,7 +90,7 @@ DocTrainAI/
 - 阶段 2：LangChain 只用于加载、切分、Embedding；jieba 为中文全文检索分词；ARQ + Redis 做解析队列；Redis 不存放业务数据
 - 阶段 3：LangGraph 做单 Agent 编排。对话与 Embedding 走可配置的通义千问兼容接口
 - 前端：Vue3、Vite、Element Plus、Pinia、Axios
-- 工具：ruff、Prettier、ESLint、Docker Compose、Gitee Go
+- 工具：ruff、Prettier、ESLint、Docker Compose、Jenkins
 
 密钥、连接串、模型地址只来自环境变量。
 
