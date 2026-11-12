@@ -10,10 +10,8 @@ stages:
   - step: build@docker
     name: server-gate
     displayName: server 门禁
+    type: cert
     certificate: acr-shenzhen
-    repository: "{{CERTIFICATION.acr-shenzhen.server}}"
-    username: "{{CERTIFICATION.acr-shenzhen.username}}"
-    password: "{{CERTIFICATION.acr-shenzhen.password}}"
     tag: "doctrain/doctrain-server:pr-${GITEE_PULL_ID}"
     dockerfile: ./server/Dockerfile
     isCache: false
@@ -22,10 +20,8 @@ stages:
   - step: build@docker
     name: web-gate
     displayName: web 门禁
+    type: cert
     certificate: acr-shenzhen
-    repository: "{{CERTIFICATION.acr-shenzhen.server}}"
-    username: "{{CERTIFICATION.acr-shenzhen.username}}"
-    password: "{{CERTIFICATION.acr-shenzhen.password}}"
     tag: "doctrain/doctrain-web:pr-${GITEE_PULL_ID}"
     dockerfile: ./web/Dockerfile
     isCache: false
