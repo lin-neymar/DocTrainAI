@@ -29,13 +29,14 @@ stages:
       retry: "0"
   - step: build@docker
     name: web-image-build
-    displayName: web 镜像（构建号）
-    repository: "${REGISTRY_URL}"
-    username: "${REGISTRY_USERNAME}"
-    password: "${REGISTRY_PASSWORD}"
+    displayName: web 镜像
+    type: cert
+    certificate: acr-shenzhen
     tag: "doctrain/doctrain-web:${GITEE_PIPELINE_BUILD_NUMBER}"
     dockerfile: ./web/Dockerfile
     isCache: false
+    strategy:
+      retry: "0"
   - step: build@docker
     name: web-image-latest
     displayName: web 镜像（latest）
