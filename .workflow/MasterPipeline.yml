@@ -1,59 +1,59 @@
-version: "1.0"
+version: '1.0'
 name: master-pipeline
 displayName: Master 门禁与镜像
 stages:
-- name: 镜像构建与推送
-  displayName: 镜像构建与推送
-  strategy: naturally
-  trigger: auto
-  steps:
-  - step: build@docker
-    name: server-image-build
-    displayName: server 镜像
-    type: cert
-    certificate: acr-shenzhen
-    tag: "doctrain/doctrain-server:${GITEE_PIPELINE_BUILD_NUMBER}"
-    dockerfile: ./server/Dockerfile
-    isCache: false
-    strategy:
-      retry: "0"
-  - step: build@docker
-    name: server-image-latest
-    displayName: server 镜像-latest
-    type: cert
-    certificate: acr-shenzhen
-    tag: doctrain/doctrain-server:latest
-    dockerfile: ./server/Dockerfile
-    isCache: false
-    strategy:
-      retry: "0"
-  - step: build@docker
-    name: web-image-build
-    displayName: web 镜像
-    type: cert
-    certificate: acr-shenzhen
-    tag: "doctrain/doctrain-web:${GITEE_PIPELINE_BUILD_NUMBER}"
-    dockerfile: ./web/Dockerfile
-    isCache: false
-    strategy:
-      retry: "0"
-  - step: build@docker
-    name: web-image-latest
-    displayName: web 镜像-latest
-    type: cert
-    certificate: acr-shenzhen
-    tag: doctrain/doctrain-web:latest
-    dockerfile: ./web/Dockerfile
-    isCache: false
-    strategy:
-      retry: "0"
+  - name: 镜像构建与推送
+    displayName: 镜像构建与推送
+    strategy: naturally
+    trigger: auto
+    steps:
+      - step: build@docker
+        name: server-image-build
+        displayName: server 镜像
+        type: cert
+        certificate: acr-shenzhen
+        tag: 'doctrain/doctrain-server:${GITEE_PIPELINE_BUILD_NUMBER}'
+        dockerfile: ./server/Dockerfile
+        isCache: false
+        strategy:
+          retry: '0'
+      - step: build@docker
+        name: server-image-latest
+        displayName: server 镜像-latest
+        type: cert
+        certificate: acr-shenzhen
+        tag: doctrain/doctrain-server:latest
+        dockerfile: ./server/Dockerfile
+        isCache: false
+        strategy:
+          retry: '0'
+      - step: build@docker
+        name: web-image-build
+        displayName: web 镜像
+        type: cert
+        certificate: acr-shenzhen
+        tag: 'doctrain/doctrain-web:${GITEE_PIPELINE_BUILD_NUMBER}'
+        dockerfile: ./web/Dockerfile
+        isCache: false
+        strategy:
+          retry: '0'
+      - step: build@docker
+        name: web-image-latest
+        displayName: web 镜像-latest
+        type: cert
+        certificate: acr-shenzhen
+        tag: doctrain/doctrain-web:latest
+        dockerfile: ./web/Dockerfile
+        isCache: false
+        strategy:
+          retry: '0'
 triggers:
   trigger: auto
   push:
     branches:
       prefix: []
       precise:
-      - master
+        - master
       include: []
 notify: []
 variables:
