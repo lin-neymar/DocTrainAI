@@ -323,7 +323,7 @@ CI 平台：Jenkins（自建构建机 = 腾讯云服务器，apt 直装、JVM �
 
 镜像驱动部署：Jenkins 构建推送镜像到 ACR 后，流水线内直接 `docker compose pull && up -d` 滚动更新（备选：服务器 cron 轮询 latest digest 变化触发）。
 
-目标机器：腾讯云轻量服务器 2C4G5M（广州），Ubuntu 22.04 LTS + Docker 预装应用镜像。`PARSE_MAX_JOBS` 默认 2（worker 解析并发，可调）。内存策略：postgres 限额 1g、redis 限额 512m，api/worker/nginx 不设限额；swap 必做（4GB 内存补 4GB swap）；Jenkins JVM -Xmx512m。构建与生产共用一台机器，构建 LibreOffice 镜像时生产 API 可能抖动（个人项目可接受）。先以 HTTP 上线，nginx 预留 443 与证书挂载位，有域名后再补证书。
+目标机器：腾讯云轻量服务器 2C4G5M（广州），Ubuntu 24.04 LTS + Docker 预装应用镜像。`PARSE_MAX_JOBS` 默认 2（worker 解析并发，可调）。内存策略：postgres 限额 1g、redis 限额 512m，api/worker/nginx 不设限额；swap 必做（4GB 内存补 4GB swap）；Jenkins JVM -Xmx512m。构建与生产共用一台机器，构建 LibreOffice 镜像时生产 API 可能抖动（个人项目可接受）。先以 HTTP 上线，nginx 预留 443 与证书挂载位，有域名后再补证书。
 
 阶段 4 增加的配置：`LOG_FORMAT`、`PARSE_MAX_JOBS`。
 
