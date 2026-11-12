@@ -1,8 +1,8 @@
 # 阶段 4：server 镜像（api / worker 共用）
 # api：uvicorn 跑 FastAPI；worker：arq 跑解析任务（同镜像不同命令，见 compose.yaml）
 # 构建上下文 = 仓库根目录（Gitee Go build@docker 固定根目录上下文；本地：docker build -f server/Dockerfile .）
-# 实验：验证 Gitee Go 构建机直连 Docker Hub（若 i/o timeout 则回退 ACR 基础镜像方案）
-FROM --platform=linux/amd64 python:3.11-slim
+# 平台固定 amd64：云端构建机与服务器均为 amd64；基础镜像托管在 ACR 的 -amd64 单平台 tag
+FROM --platform=linux/amd64 crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com/doctrain/python:3.11-slim-amd64
 
 # 办公预览转换依赖：LibreOffice writer/calc/impress（soffice 命令行）
 # --no-install-recommends 只装本体，控制镜像体积
