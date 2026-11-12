@@ -1,7 +1,7 @@
 # 阶段 4：server 镜像（api / worker 共用）
 # api：uvicorn 跑 FastAPI；worker：arq 跑解析任务（同镜像不同命令，见 compose.yaml）
 # 构建上下文 = server/（compose build: context: ./server）
-FROM python:3.11-slim
+FROM crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com/doctrain/python:3.11-slim
 
 # 办公预览转换依赖：LibreOffice writer/calc/impress（soffice 命令行）
 # --no-install-recommends 只装本体，控制镜像体积
