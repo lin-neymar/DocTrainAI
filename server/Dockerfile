@@ -6,7 +6,9 @@ FROM --platform=linux/amd64 crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyun
 
 # 办公预览转换依赖：LibreOffice writer/calc/impress（soffice 命令行）
 # --no-install-recommends 只装本体，控制镜像体积
-RUN apt-get update \
+# apt 源替换阿里云镜像：Gitee Go 构建机直连 deb.debian.org 极慢（实测 LibreOffice 下载 >60 分钟必超时）
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         libreoffice-writer libreoffice-calc libreoffice-impress \
     && rm -rf /var/lib/apt/lists/*
@@ -19,7 +21,7 @@ WORKDIR /app
 
 # 先拷依赖清单再安装：requirements 不变时命中 Docker 层缓存，改代码不必重装
 COPY server/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 
 # 再拷应用代码（根目录 .dockerignore 已排除 .venv/缓存/本地存储，tests 保留用于构建期门禁）
 COPY server/ .

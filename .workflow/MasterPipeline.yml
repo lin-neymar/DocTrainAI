@@ -59,7 +59,7 @@ notify: []
 variables:
   REGISTRY_URL:
     type: TEXT
-    default: registry.cn-shenzhen.aliyuncs.com
+    default: crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com
   REGISTRY_USERNAME:
     type: TEXT
     default: change-me
