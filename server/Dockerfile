@@ -1,6 +1,6 @@
 # 阶段 4：server 镜像（api / worker 共用）
 # api：uvicorn 跑 FastAPI；worker：arq 跑解析任务（同镜像不同命令，见 compose.yaml）
-# 构建上下文 = server/（compose build: context: ./server）
+# 构建上下文 = 仓库根目录（Gitee Go build@docker 固定根目录上下文；本地：docker build -f server/Dockerfile .）
 FROM crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com/doctrain/python:3.11-slim
 
 # 办公预览转换依赖：LibreOffice writer/calc/impress（soffice 命令行）
@@ -17,11 +17,11 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # 先拷依赖清单再安装：requirements 不变时命中 Docker 层缓存，改代码不必重装
-COPY requirements.txt ./
+COPY server/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 再拷应用代码（.dockerignore 已排除 .venv/缓存/本地存储，tests 保留用于构建期门禁）
-COPY . .
+# 再拷应用代码（根目录 .dockerignore 已排除 .venv/缓存/本地存储，tests 保留用于构建期门禁）
+COPY server/ .
 
 # 阶段 4 门禁内建：构建即校验（ruff 静态检查 + pytest）
 # 构建上下文无 .env：注入 CI 占位值满足 Settings 四个必填字段（database_url/init_admin_*/jwt_secret），

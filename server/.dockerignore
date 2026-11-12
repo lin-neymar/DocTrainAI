@@ -1,4 +1,4 @@
-# 阶段 4：server 镜像构建排除清单（构建上下文 = server/）
+# 阶段 4：构建上下文已统一为仓库根目录，生效清单见根目录 .dockerignore；本文件保留备用
 .venv/
 __pycache__/
 *.py[cod]
