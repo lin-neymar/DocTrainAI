@@ -39,13 +39,14 @@ stages:
       retry: "0"
   - step: build@docker
     name: web-image-latest
-    displayName: web 镜像（latest）
-    repository: "${REGISTRY_URL}"
-    username: "${REGISTRY_USERNAME}"
-    password: "${REGISTRY_PASSWORD}"
+    displayName: web 镜像-latest
+    type: cert
+    certificate: acr-shenzhen
     tag: doctrain/doctrain-web:latest
     dockerfile: ./web/Dockerfile
     isCache: false
+    strategy:
+      retry: "0"
 triggers:
   trigger: auto
   push:
