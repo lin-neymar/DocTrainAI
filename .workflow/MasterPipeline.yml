@@ -10,9 +10,10 @@ stages:
       - step: build@docker
         name: server-image-build
         displayName: server 镜像
-        type: cert
-        certificate: acr-shenzhen
-        tag: 'crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com/doctrain/doctrain-server:${GITEE_PIPELINE_BUILD_NUMBER}'
+        repository: crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com
+        username: ${REGISTRY_USERNAME}
+        password: ${REGISTRY_PASSWORD}
+        tag: 'doctrain/doctrain-server:${GITEE_PIPELINE_BUILD_NUMBER}'
         dockerfile: ./server/Dockerfile
         isCache: false
         strategy:
@@ -20,9 +21,10 @@ stages:
       - step: build@docker
         name: server-image-latest
         displayName: server 镜像-latest
-        type: cert
-        certificate: acr-shenzhen
-        tag: crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com/doctrain/doctrain-server:latest
+        repository: crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com
+        username: ${REGISTRY_USERNAME}
+        password: ${REGISTRY_PASSWORD}
+        tag: doctrain/doctrain-server:latest
         dockerfile: ./server/Dockerfile
         isCache: false
         strategy:
@@ -30,9 +32,10 @@ stages:
       - step: build@docker
         name: web-image-build
         displayName: web 镜像
-        type: cert
-        certificate: acr-shenzhen
-        tag: 'crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com/doctrain/doctrain-web:${GITEE_PIPELINE_BUILD_NUMBER}'
+        repository: crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com
+        username: ${REGISTRY_USERNAME}
+        password: ${REGISTRY_PASSWORD}
+        tag: 'doctrain/doctrain-web:${GITEE_PIPELINE_BUILD_NUMBER}'
         dockerfile: ./web/Dockerfile
         isCache: false
         strategy:
@@ -40,9 +43,10 @@ stages:
       - step: build@docker
         name: web-image-latest
         displayName: web 镜像-latest
-        type: cert
-        certificate: acr-shenzhen
-        tag: crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com/doctrain/doctrain-web:latest
+        repository: crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com
+        username: ${REGISTRY_USERNAME}
+        password: ${REGISTRY_PASSWORD}
+        tag: doctrain/doctrain-web:latest
         dockerfile: ./web/Dockerfile
         isCache: false
         strategy:
