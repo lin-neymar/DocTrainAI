@@ -11,6 +11,7 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         libreoffice-writer libreoffice-calc libreoffice-impress \
+        fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 # 日志直接输出 stdout/stderr（容器日志采集的标准姿势），不生成 .pyc
