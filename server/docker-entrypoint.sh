@@ -12,7 +12,7 @@ else
     alembic upgrade head
 
     echo "[entrypoint] seed（幂等：已存在的种子数据自动跳过）"
-    python scripts/seed.py
+    python -m scripts.seed
 fi
 
 echo "[entrypoint] exec: $*"
