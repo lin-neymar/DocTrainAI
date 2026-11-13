@@ -60,7 +60,7 @@ pipeline {
                     cp compose.yaml /opt/doctrain/compose.yaml
                     cd /opt/doctrain
                     SERVER_IMAGE=${SERVER_IMAGE} WEB_IMAGE=${WEB_IMAGE} TAG=latest docker compose -f compose.yaml pull
-                    SERVER_IMAGE=${SERVER_IMAGE} WEB_IMAGE=${WEB_IMAGE} TAG=latest docker compose -f compose.yaml up -d
+                    SERVER_IMAGE=${SERVER_IMAGE} WEB_IMAGE=${WEB_IMAGE} TAG=latest docker compose -f compose.yaml up -d --force-recreate api worker web
                 """
             }
         }
