@@ -1,0 +1,48 @@
+version: "1.0"
+name: pr-pipeline
+displayName: PR 门禁
+stages:
+- name: 门禁（内建镜像构建）
+  displayName: 门禁（内建镜像构建）
+  strategy: naturally
+  trigger: auto
+  steps:
+  - step: build@docker
+    name: server-gate
+    displayName: server 门禁
+    type: cert
+    certificate: acr-shenzhen
+    tag: "doctrain/doctrain-server:pr-${GITEE_PULL_ID}"
+    dockerfile: ./server/Dockerfile
+    isCache: false
+    strategy:
+      retry: "0"
+  - step: build@docker
+    name: web-gate
+    displayName: web 门禁
+    type: cert
+    certificate: acr-shenzhen
+    tag: "doctrain/doctrain-web:pr-${GITEE_PULL_ID}"
+    dockerfile: ./web/Dockerfile
+    isCache: false
+    strategy:
+      retry: "0"
+triggers:
+  trigger: auto
+  pr:
+    branches:
+      prefix: []
+      precise: []
+      include:
+      - master
+notify: []
+variables:
+  REGISTRY_URL:
+    type: TEXT
+    default: registry.cn-shenzhen.aliyuncs.com
+  REGISTRY_USERNAME:
+    type: TEXT
+    default: change-me
+  REGISTRY_PASSWORD:
+    type: TEXT
+    default: change-me

@@ -77,8 +77,5 @@ export interface CourseBatchDeleteResult {
 
 // 实现：POST /api/v1/courses/batch-delete
 export function batchDeleteCoursesApi(ids: string[]) {
-  return request.post<unknown, CourseBatchDeleteResult>(
-    '/api/v1/courses/batch-delete',
-    { ids },
-  )
+  return request.post<unknown, CourseBatchDeleteResult>('/api/v1/courses/batch-delete', { ids })
 }

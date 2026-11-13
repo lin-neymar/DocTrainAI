@@ -34,11 +34,7 @@ import {
 } from '@/api/system/course'
 import { fetchDeptTreeApi, type DeptTreeNode } from '@/api/system/dept'
 import { fetchDocsApi, type DocItem } from '@/api/system/doc'
-import {
-  audienceTreeForOwner,
-  canCustomizeAudience,
-  collectSubtreeIds,
-} from '@/utils/audience'
+import { audienceTreeForOwner, canCustomizeAudience, collectSubtreeIds } from '@/utils/audience'
 import { formatDateTime } from '@/utils/datetime'
 import { hasPermission } from '@/utils/permission'
 
@@ -101,9 +97,7 @@ const docsCourseId = ref<string | null>(null)
 const docsCourseTitle = ref('')
 const selectedDocIds = ref<string[]>([])
 
-const audienceTreeData = computed(() =>
-  audienceTreeForOwner(deptTree.value, form.dept_id),
-)
+const audienceTreeData = computed(() => audienceTreeForOwner(deptTree.value, form.dept_id))
 const treeProps = { label: 'name', children: 'children' }
 
 const formRules: FormRules<typeof form> = {
@@ -114,9 +108,7 @@ const formRules: FormRules<typeof form> = {
   dept_id: [{ required: true, message: '请选择归属部门', trigger: 'change' }],
 }
 
-const formTitle = computed(() =>
-  formMode.value === 'create' ? '新增课程' : '编辑课程',
-)
+const formTitle = computed(() => (formMode.value === 'create' ? '新增课程' : '编辑课程'))
 
 // 实现：遍历部门树，收集 id→名称（列表展示用）
 function collectDeptNames(nodes: DeptTreeNode[]): Record<string, string> {
@@ -342,11 +334,11 @@ async function onDelete(row: unknown) {
   if (!canDelete.value) return
   const c = asCourse(row)
   try {
-    await ElMessageBox.confirm(
-      `确定删除课程「${c.title}」？已挂接文档不会被删除。`,
-      '删除课程',
-      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
-    )
+    await ElMessageBox.confirm(`确定删除课程「${c.title}」？已挂接文档不会被删除。`, '删除课程', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
   } catch {
     return
   }
@@ -516,9 +508,7 @@ onMounted(async () => {
               <ElButton v-if="canAttach" link type="primary" @click="openAttachDocs(row)">
                 挂接文档
               </ElButton>
-              <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)">
-                删除
-              </ElButton>
+              <ElButton v-if="canDelete" link type="danger" @click="onDelete(row)"> 删除 </ElButton>
             </template>
           </ElTableColumn>
         </ElTable>
@@ -600,9 +590,7 @@ onMounted(async () => {
       width="520px"
       destroy-on-close
     >
-      <p class="field-tip">
-        仅列出当前可见文档；整体替换后以本次勾选为准（可清空）。
-      </p>
+      <p class="field-tip">仅列出当前可见文档；整体替换后以本次勾选为准（可清空）。</p>
       <ElSelect
         v-model="selectedDocIds"
         multiple

@@ -1,68 +1,117 @@
-# DocTrainAI Docker Compose 编排文件（仓库根目录）。
-# 阶段 1：仅 PostgreSQL。阶段 2：在同一文件追加 redis、api、worker 等。
-# 启动：在仓库根目录执行 docker compose up -d
+# DocTrainAI Docker Compose 编排（仓库根目录）。
+# 阶段 4：五服务生产编排——api / worker / web / postgres / redis。
+# - api/worker 共用镜像 doctrain-server（同镜像不同命令，见 server/Dockerfile）；
+# - postgres/redis 不暴露宿主机端口（本地开发由 compose.override.yaml 复开）；
+# - 服务器部署显式指定基文件（显式 -f 时 override 不会自动加载）：
+#     docker compose -f compose.yaml pull && docker compose -f compose.yaml up -d
+# 启动（本地）：docker compose up -d —— 自动叠加 compose.override.yaml（本地构建镜像）
 # 停止：docker compose down（加 -v 会删除数据卷，慎用）
 
-# 定义要运行的容器服务列表
+# api / worker 共用环境块（YAML 锚点：定义一次，两处引用）
+x-api-env: &api-env
+  APP_ENV: ${APP_ENV:-production}
+  # 容器内互联用服务名 postgres，不沿用本机 .env 里的 127.0.0.1
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-doctrain}:${POSTGRES_PASSWORD:-doctrain_dev}@postgres:5432/${POSTGRES_DB:-doctrain}
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+  INIT_ADMIN_USERNAME: ${INIT_ADMIN_USERNAME:-admin}
+  INIT_ADMIN_PASSWORD: ${INIT_ADMIN_PASSWORD:-change-me-dev}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+  # 日志格式：留空则随 APP_ENV 推导（production=json）
+  LOG_FORMAT: ${LOG_FORMAT:-}
+  PARSE_MAX_JOBS: ${PARSE_MAX_JOBS:-2}
+  EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+  EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-v3}
+  EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
+  CHAT_BASE_URL: ${CHAT_BASE_URL:-}
+  CHAT_API_KEY: ${CHAT_API_KEY:-}
+  CHAT_MODEL: ${CHAT_MODEL:-qwen-plus}
+
 services:
-  # 服务名 postgres：docker compose 内其它服务用此名互联（如 api 里 DATABASE_HOST=postgres）
-  postgres:
-    # 镜像：PostgreSQL 16 + pgvector 扩展（阶段 1 不建向量列，阶段 2 直接用同一库）
-    image: pgvector/pgvector:pg16
-    # 固定容器名，便于 docker logs doctrainai-postgres 排查
-    container_name: doctrainai-postgres
-    # 除非手动 stop，否则 Docker 守护进程重启后自动拉起容器
+  # ---------- 后端 api：FastAPI（uvicorn） ----------
+  api:
+    # 镜像由 CI 构建推送；本地源码构建：docker build -f server/Dockerfile .（上下文=仓库根目录）
+    image: ${SERVER_IMAGE:-doctrain-server:${TAG:-latest}}
+    container_name: doctrainai-api
     restart: unless-stopped
-    # 端口映射：宿主机端口:容器端口。本机用 127.0.0.1:5432 连接
+    # 入口脚本先 alembic upgrade head + 幂等 seed，再 exec 本命令
+    command: ['uvicorn', 'app.main:app', '--host', '0.0.0.0', '--port', '8000']
+    environment: *api-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # 原文件存储：api 写、worker 读，同一命名卷
+      - storage_data:/app/storage
+    healthcheck:
+      test:
+        ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ---------- 后台 worker：ARQ 解析任务 ----------
+  worker:
+    image: ${SERVER_IMAGE:-doctrain-server:${TAG:-latest}}
+    container_name: doctrainai-worker
+    restart: unless-stopped
+    # 首参 worker 告知入口脚本跳过迁移与 seed（worker 不碰 schema）
+    command: ['worker', 'arq', 'app.workers.settings.WorkerSettings']
+    environment: *api-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - storage_data:/app/storage
+
+  # ---------- 前端 web：nginx 托管 dist 并反代 /api ----------
+  web:
+    image: ${WEB_IMAGE:-doctrain-web:${TAG:-latest}}
+    container_name: doctrainai-web
+    restart: unless-stopped
     ports:
-      - '5432:5432'
-    # 初始化数据库时的账号、密码、默认库名（须与 .env 中 DATABASE_URL 一致）
+      - '80:80'
+    depends_on:
+      - api
+
+  # ---------- 数据库：PostgreSQL 16 + pgvector ----------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: doctrainai-postgres
+    restart: unless-stopped
+    # 生产不暴露宿主机端口（安全组亦不放行）；本地调试由 override 复开
     environment:
-      POSTGRES_USER: doctrain
-      POSTGRES_PASSWORD: doctrain_dev
-      POSTGRES_DB: doctrain
-    # 数据目录挂载到命名卷，删容器不删数据；down -v 才会清空
+      POSTGRES_USER: ${POSTGRES_USER:-doctrain}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-doctrain_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-doctrain}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # 健康检查：通过后 compose ps 显示 healthy，编排/探针可依赖
     healthcheck:
-      # 在容器内执行 pg_isready，确认 Postgres 接受连接
-      test: ['CMD-SHELL', 'pg_isready -U doctrain -d doctrain']
-      # 每 5 秒检查一次
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-doctrain} -d ${POSTGRES_DB:-doctrain}']
       interval: 5s
-      # 单次检查最长等待 5 秒
       timeout: 5s
-      # 连续失败 5 次才标记 unhealthy
       retries: 5
 
-  # 服务名 redis：docker compose 内其它服务用此名互联（如 api 里 REDIS_HOST=redis）
+  # ---------- 缓存/队列：Redis 7 ----------
   redis:
-    # 镜像：Redis 7 + Alpine 镜像（小巧）
     image: redis:7-alpine
-    # 固定容器名，便于 docker logs doctrainai-redis 排查
     container_name: doctrainai-redis
-    # 除非手动 stop，否则 Docker 守护进程重启后自动拉起容器
     restart: unless-stopped
-    # 端口映射：宿主机端口:容器端口。本机用 127.0.0.1:6379 连接
-    ports:
-      - '6379:6379'
-    # 数据目录挂载到命名卷，删容器不删数据；down -v 才会清空
     volumes:
       - redis_data:/data
-    # 健康检查：通过后 compose ps 显示 healthy，编排/探针可依赖
     healthcheck:
-      # 在容器内执行 redis-cli ping，确认 Redis 接受连接
       test: ['CMD', 'redis-cli', 'ping']
-      # 每 5 秒检查一次
       interval: 5s
-      # 单次检查最长等待 5 秒
       timeout: 3s
-      # 连续失败 5 次才标记 unhealthy
       retries: 5
 
-# 声明命名卷（由 Docker 管理存储位置，通常在本机 Docker 数据目录）
 volumes:
-  # 卷名 postgres_data，与上方 services.postgres.volumes 引用一致
   postgres_data:
-  # 卷名 redis_data，与上方 services.redis.volumes 引用一致
   redis_data:
+  storage_data:

@@ -5,17 +5,8 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import {
-  fetchMeApi,
-  loginApi,
-  logoutApi,
-  updateMyThemeApi,
-} from '@/api/system/auth'
-import {
-  applyThemePrimary,
-  DEFAULT_THEME_PRIMARY,
-  writeStoredThemePrimary,
-} from '@/utils/theme'
+import { fetchMeApi, loginApi, logoutApi, updateMyThemeApi } from '@/api/system/auth'
+import { applyThemePrimary, DEFAULT_THEME_PRIMARY, writeStoredThemePrimary } from '@/utils/theme'
 import { clearToken, getToken, setToken } from '@/utils/token'
 
 export const useUserStore = defineStore('user', () => {

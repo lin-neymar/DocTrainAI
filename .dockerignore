@@ -1,0 +1,27 @@
+# 阶段 4：仓库根目录构建上下文排除清单
+# Gitee Go build@docker 固定以仓库根目录为上下文；本地构建统一：
+#   docker build -f server/Dockerfile .
+#   docker build -f web/Dockerfile .
+# 本文件对 server/web 两个镜像的构建同时生效（原 server/.dockerignore、web/.dockerignore 内容已迁移至此）
+
+# 版本控制 / IDE / 环境
+.git/
+.idea/
+.vscode/
+.env
+.workflow/
+
+# ---------- server 侧 ----------
+server/.venv/
+server/.pytest_cache/
+server/.pytest_storage/
+server/.ruff_cache/
+server/storage/
+__pycache__/
+*.py[cod]
+
+# ---------- web 侧 ----------
+web/node_modules/
+web/dist/
+web/.env
+web/.env.*

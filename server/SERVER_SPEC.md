@@ -309,17 +309,21 @@ worker 侧日志用 ARQ `job_id` 作为关联标识。
 
 日志禁止输出密钥、令牌、文档正文与消息正文。
 
-### 阶段 4 CI/CD 分支与触发矩阵
+### 阶段 4 CI/CD：Jenkins 流水线
 
 分支模型：master 为稳定主干，dev 日常迭代，合并进 master 走 PR。
 
-Gitee Actions 触发矩阵（A 档）：push master = 全量门禁（ruff、pytest、eslint、prettier、typecheck、build）+ 构建并推送镜像（tag = 短 SHA 与 latest）；pull_request = 只跑门禁不推送镜像；push 其他分支不触发。
+CI 平台：Jenkins（自建构建机 = 腾讯云服务器，apt 直装、JVM 限 512m、jenkins 用户加 docker 组、构建直接调用宿主 docker）。流水线定义为仓库根目录 `Jenkinsfile`（声明式语法），纳入 Git 管理。
 
-### 阶段 4 自动部署与目标机器
+触发与流水线：Gitee webhook 推送事件触发 Jenkins 构建（webhook 为后置增强，先手动触发打通主链路）。流水线阶段：① 检出代码；② server 镜像构建（门禁内建：Dockerfile RUN 阶段执行 ruff、pytest，任一失败即镜像构建失败）；③ web 镜像构建（门禁内建：eslint、prettier、typecheck）；④ 推送 ACR（tag = 构建号 ${BUILD_NUMBER} 与 latest 双 tag）；⑤ 部署（docker compose pull && up -d 滚动更新）。
 
-master 合并全绿后，CI 自动 SSH 到目标机执行 `git pull` → `docker compose pull && up -d`。SSH 私钥、服务器 IP、registry 凭据全部走 Gitee secrets，不落仓库、不落设置页。
+构建环境与镜像仓库：构建机为原生 amd64（与生产架构一致）。基础镜像托管于自有 ACR（`crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com/doctrain/{python,node,nginx}` 的 `-amd64` 单平台 tag），Dockerfile 的 FROM 固定 `--platform=linux/amd64` 并指向 ACR；apt/pip 换阿里云镜像源。ACR 个人版专属域名形态为 `crpi-{实例ID}.{地域}.personal.cr.aliyuncs.com`，老式公共域名 `registry.cn-shenzhen.aliyuncs.com` 无效（push 报 insufficient_scope）；个人版 push 不自动建仓，需控制台手动建仓。
 
-目标机器：腾讯云轻量服务器 2C4G5M（上海），Ubuntu 22.04 LTS + Docker 预装应用镜像。`PARSE_MAX_JOBS` 默认 2（worker 解析并发，可调）；不做容器内存限额；swap 与镜像加速器为部署建议项，写入 README。先以 HTTP 上线，nginx 预留 443 与证书挂载位，有域名后再补证书。
+### 阶段 4 部署与目标机器
+
+镜像驱动部署：Jenkins 构建推送镜像到 ACR 后，流水线内直接 `docker compose pull && up -d` 滚动更新（备选：服务器 cron 轮询 latest digest 变化触发）。
+
+目标机器：腾讯云轻量服务器 2C4G5M（广州），Ubuntu 24.04 LTS + Docker 预装应用镜像。`PARSE_MAX_JOBS` 默认 2（worker 解析并发，可调）。内存策略：postgres 限额 1g、redis 限额 512m，api/worker/nginx 不设限额；swap 必做（4GB 内存补 4GB swap）；Jenkins JVM -Xmx512m。构建与生产共用一台机器，构建 LibreOffice 镜像时生产 API 可能抖动（个人项目可接受）。先以 HTTP 上线，nginx 预留 443 与证书挂载位，有域名后再补证书。
 
 阶段 4 增加的配置：`LOG_FORMAT`、`PARSE_MAX_JOBS`。
 

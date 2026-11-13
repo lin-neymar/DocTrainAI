@@ -4,10 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElButton, ElCard, ElForm, ElFormItem, ElInput, ElMessage } from 'element-plus'
 
-import {
-  brandLogoUrl,
-  fetchPublicBrandApi,
-} from '@/api/system/settings'
+import { brandLogoUrl, fetchPublicBrandApi } from '@/api/system/settings'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
@@ -26,8 +23,7 @@ const subtitle = ref('企业内部规章培训与知识助手')
 const hasLogo = ref(false)
 const logoBust = ref(0)
 
-const logoSrc = () =>
-  hasLogo.value ? `${brandLogoUrl()}?t=${logoBust.value}` : ''
+const logoSrc = () => (hasLogo.value ? `${brandLogoUrl()}?t=${logoBust.value}` : '')
 
 const rules: FormRules<typeof form> = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],

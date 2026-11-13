@@ -1,0 +1,9 @@
+# 阶段 4：构建上下文已统一为仓库根目录，生效清单见根目录 .dockerignore；本文件保留备用
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest_storage/
+.ruff_cache/
+# tests/ 进入构建上下文：阶段 4 门禁内建，镜像构建期跑 ruff + pytest
+storage/

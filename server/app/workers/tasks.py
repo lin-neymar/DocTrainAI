@@ -11,6 +11,7 @@ import uuid  # UUID转换
 import app.models.ai_ext  # noqa: F401  — 注册 doc_parse_task / doc_chunk
 import app.models.system  # noqa: F401  — Worker 进程需注册 doc 等表，解析 FK
 from app.config import settings  # 读取 PARSE_MAX_RETRY
+from app.core.logging import job_id_var  # worker 日志关联 job_id
 from app.database import SessionLocal  # 数据库会话工厂
 from app.models.ai_ext.parse_task import (
     PARSE_STATUS_FAILED,  # 任务失败状态
@@ -28,6 +29,8 @@ async def parse_document(ctx: dict, task_id: str) -> None:
 
     ctx["job_try"] 由 ARQ 注入（首次执行 = 0）；抛回的异常触发 ARQ 重入队。
     """
+    # 阶段 4：绑定 ARQ job_id 到 contextvar；重试轮次 job_id 不变，全部日志可串起来
+    job_token = job_id_var.set(str(ctx.get("job_id") or "-"))
     tid = uuid.UUID(task_id)  # 字符串task_id转UUID
     session = SessionLocal()  # 获取数据库会话
     try:
@@ -62,4 +65,5 @@ async def parse_document(ctx: dict, task_id: str) -> None:
             task_id, task.doc_id, chunk_count,
         )
     finally:
+        job_id_var.reset(job_token)  # 释放绑定，避免串到下一个 job
         session.close() # 关闭数据库会话

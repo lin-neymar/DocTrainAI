@@ -125,9 +125,7 @@ const pwdRules: FormRules<typeof pwdForm> = {
   ],
 }
 
-const dialogTitle = computed(() =>
-  dialogMode.value === 'create' ? '新增用户' : '编辑用户',
-)
+const dialogTitle = computed(() => (dialogMode.value === 'create' ? '新增用户' : '编辑用户'))
 
 // 实现：遍历部门树，收集 id→名称（列表展示用）
 function collectDeptNames(nodes: DeptTreeNode[]): Record<string, string> {
@@ -456,12 +454,7 @@ onMounted(async () => {
           empty-text="暂无用户"
           @selection-change="onSelectionChange"
         >
-          <ElTableColumn
-            v-if="canDelete"
-            type="selection"
-            width="48"
-            :selectable="canSelectRow"
-          />
+          <ElTableColumn v-if="canDelete" type="selection" width="48" :selectable="canSelectRow" />
           <ElTableColumn prop="username" label="用户名" min-width="120" />
           <ElTableColumn label="部门" min-width="140">
             <template #default="{ row }">
@@ -499,12 +492,7 @@ onMounted(async () => {
               <ElButton v-if="canUpdate" link type="primary" @click="openEdit(row)">
                 编辑
               </ElButton>
-              <ElButton
-                v-if="canResetPassword"
-                link
-                type="primary"
-                @click="openResetPwd(row)"
-              >
+              <ElButton v-if="canResetPassword" link type="primary" @click="openResetPwd(row)">
                 重置密码
               </ElButton>
               <ElButton
@@ -575,12 +563,7 @@ onMounted(async () => {
             placeholder="可多选"
             style="width: 100%"
           >
-            <ElOption
-              v-for="r in roles"
-              :key="r.id"
-              :label="r.name"
-              :value="r.id"
-            />
+            <ElOption v-for="r in roles" :key="r.id" :label="r.name" :value="r.id" />
           </ElSelect>
         </ElFormItem>
         <p v-else class="field-tip">
