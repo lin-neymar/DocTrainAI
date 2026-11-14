@@ -101,6 +101,7 @@ onMounted(() => {
           登录
         </ElButton>
       </ElForm>
+      <div class="version">v1.1</div>
     </ElCard>
   </div>
 </template>
@@ -160,5 +161,12 @@ onMounted(() => {
 .submit {
   width: 100%;
   margin-top: 8px;
+}
+
+.version {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--dt-text-secondary);
 }
 </style>
