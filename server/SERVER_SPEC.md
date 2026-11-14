@@ -315,7 +315,7 @@ worker 侧日志用 ARQ `job_id` 作为关联标识。
 
 CI 平台：Jenkins（自建构建机 = 腾讯云服务器，apt 直装、JVM 限 512m、jenkins 用户加 docker 组、构建直接调用宿主 docker）。流水线定义为仓库根目录 `Jenkinsfile`（声明式语法），纳入 Git 管理。
 
-触发与流水线：Gitee webhook 推送事件触发 Jenkins 构建（webhook 为后置增强，先手动触发打通主链路）。流水线阶段：① 检出代码；② server 镜像构建（门禁内建：Dockerfile RUN 阶段执行 ruff、pytest，任一失败即镜像构建失败）；③ web 镜像构建（门禁内建：eslint、prettier、typecheck）；④ 推送 ACR（tag = 构建号 ${BUILD_NUMBER} 与 latest 双 tag）；⑤ 部署（docker compose pull && up -d 滚动更新）。
+触发与流水线：Gitee webhook 推送事件触发 Jenkins 构建（端点 /gitee-webhook/post；分支过滤由任务 SCM 的 Branch Specifier 决定，dev 静默、master 触发）。流水线阶段：① 检出代码；② server 镜像构建（门禁内建：Dockerfile RUN 阶段执行 ruff、pytest，任一失败即镜像构建失败）；③ web 镜像构建（门禁内建：eslint、prettier、typecheck）；④ 推送 ACR（tag = 构建号 ${BUILD_NUMBER} 与 latest 双 tag）；⑤ 部署（docker compose pull && up -d --force-recreate api worker web 滚动更新）。
 
 构建环境与镜像仓库：构建机为原生 amd64（与生产架构一致）。基础镜像托管于自有 ACR（`crpi-8kb0sh7oyiobdzwv.cn-shenzhen.personal.cr.aliyuncs.com/doctrain/{python,node,nginx}` 的 `-amd64` 单平台 tag），Dockerfile 的 FROM 固定 `--platform=linux/amd64` 并指向 ACR；apt/pip 换阿里云镜像源。ACR 个人版专属域名形态为 `crpi-{实例ID}.{地域}.personal.cr.aliyuncs.com`，老式公共域名 `registry.cn-shenzhen.aliyuncs.com` 无效（push 报 insufficient_scope）；个人版 push 不自动建仓，需控制台手动建仓。
 
