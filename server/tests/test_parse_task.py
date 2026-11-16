@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 import bcrypt
 import pytest
+from arq.worker import Retry
 from sqlalchemy import delete, select
 
 from app.config import settings
@@ -285,13 +286,14 @@ def test_worker_success_marks_succeeded(pt_env, monkeypatch) -> None:
     task = parse_task_service.enqueue_for_doc(session, doc_id=env.doc_a.id)
     monkeypatch.setattr(worker_tasks, "ingest_document", lambda s, doc_id: 3)
 
-    asyncio.run(parse_document({"job_try": 0}, str(task.id)))
+    # ARQ 0.28 首跑注入 job_try=1
+    asyncio.run(parse_document({"job_try": 1}, str(task.id)))
 
     assert _reload_task(task.id).status == PARSE_STATUS_SUCCEEDED
 
 
 def test_worker_failure_within_retry_budget_raises(pt_env, monkeypatch) -> None:
-    """重试未耗尽：抛回异常交给 ARQ 重入队，任务保留 running 并记尝试次数。"""
+    """重试未耗尽：抛 Retry 交给 ARQ 重入队，任务保留 running 并记尝试次数。"""
     session, env = pt_env
     monkeypatch.setattr(parse_task_service, "enqueue_parse_document", lambda tid: None)
     monkeypatch.setattr(settings, "parse_max_retry", 1)
@@ -302,17 +304,19 @@ def test_worker_failure_within_retry_budget_raises(pt_env, monkeypatch) -> None:
 
     monkeypatch.setattr(worker_tasks, "ingest_document", boom)
 
-    with pytest.raises(ValueError):
-        asyncio.run(parse_document({"job_try": 0}, str(task.id)))
+    # 首跑 job_try=1，未达 max_attempts=2 → 抛 Retry（ARQ 0.28 仅认显式 Retry 才重试）
+    with pytest.raises(Retry):
+        asyncio.run(parse_document({"job_try": 1}, str(task.id)))
 
     reloaded = _reload_task(task.id)
     assert reloaded.status == PARSE_STATUS_RUNNING
     assert reloaded.error_summary is not None
+    assert "第 1 次尝试失败" in reloaded.error_summary
     assert "将重试" in reloaded.error_summary
 
 
 def test_worker_retry_exhausted_marks_failed(pt_env, monkeypatch) -> None:
-    """重试耗尽（job_try 达到上限的最后一跑）：落 failed 并写错误摘要。"""
+    """重试耗尽（最后一跑）：落 failed 并写错误摘要。"""
     session, env = pt_env
     monkeypatch.setattr(parse_task_service, "enqueue_parse_document", lambda tid: None)
     monkeypatch.setattr(settings, "parse_max_retry", 1)
@@ -323,10 +327,12 @@ def test_worker_retry_exhausted_marks_failed(pt_env, monkeypatch) -> None:
 
     monkeypatch.setattr(worker_tasks, "ingest_document", boom)
 
+    # 第 2 次尝试 job_try=2 = max_attempts → 落终态并抛原始异常
     with pytest.raises(ValueError):
-        asyncio.run(parse_document({"job_try": 1}, str(task.id)))
+        asyncio.run(parse_document({"job_try": 2}, str(task.id)))
 
     reloaded = _reload_task(task.id)
     assert reloaded.status == PARSE_STATUS_FAILED
     assert reloaded.error_summary is not None
+    assert "第 2 次尝试失败" in reloaded.error_summary
     assert "重试耗尽" in reloaded.error_summary

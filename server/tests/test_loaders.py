@@ -74,3 +74,15 @@ def test_md_hash_edge_cases_not_headings() -> None:
 
     assert len(docs) == 1
     assert "heading" not in docs[0].metadata
+
+
+def test_nul_bytes_are_stripped_from_extracted_text() -> None:
+    """提取文本中的 NUL 字节统一清洗：PostgreSQL text 拒绝 \x00（PDF 字体映射曾产出）。"""
+    content = "# 制度标题\n发布日期：二\x00二六年十一月十六日\n正文内容。\n".encode("utf-8")
+
+    docs = load_documents(content, "md")
+
+    assert len(docs) == 1
+    assert "\x00" not in docs[0].page_content
+    assert "二二六年十一月十六日" in docs[0].page_content
+    assert "正文内容" in docs[0].page_content

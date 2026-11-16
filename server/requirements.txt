@@ -14,7 +14,7 @@ pytest           # 自动化测试
 httpx            # TestClient 与 HTTP 调用（测试/后续接口调试）
 ruff             # 代码风格与静态检查
 # ---------- 阶段 2：解析队列 / 切分 Embedding / 中文分词 ----------
-arq                    # 异步任务队列（依赖 Redis）
+arq==0.28.0            # 异步任务队列（依赖 Redis）；锁版本：0.28 起重试须显式抛 Retry
 redis                  # Redis 客户端（ARQ 使用）
 jieba                  # 中文分词 → 写入 tsvector(simple)
 langchain-core         # Document 等核心类型

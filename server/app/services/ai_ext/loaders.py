@@ -16,17 +16,20 @@ def load_documents(content: bytes, extension: str) -> list[Document]:
     :param extension: 文件后缀名，如 pdf / md
     """
     ext = (extension or "").lower().lstrip(".")  # 转小写、去掉开头的点，统一格式
-    if ext == "md":
-        return _load_md(content)
-    if ext == "pdf":
-        return _load_pdf(content)
-    if ext == "docx":
-        return _load_docx(content)
-    if ext == "xlsx":
-        return _load_xlsx(content)
-    if ext == "pptx":
-        return _load_pptx(content)
-    raise ValueError(f"不支持的解析扩展名: {ext}")  # 后缀不在支持列表，抛出异常
+    loader = {
+        "md": _load_md,
+        "pdf": _load_pdf,
+        "docx": _load_docx,
+        "xlsx": _load_xlsx,
+        "pptx": _load_pptx,
+    }.get(ext)
+    if loader is None:
+        raise ValueError(f"不支持的解析扩展名: {ext}")  # 后缀不在支持列表，抛出异常
+    docs = loader(content)
+    # 统一清洗 NUL 字节：PostgreSQL text 字段禁止 \x00，部分 PDF 字体映射会产出，曾致写库必败
+    for d in docs:
+        d.page_content = d.page_content.replace("\x00", "")
+    return docs
 
 
 def _load_md(content: bytes) -> list[Document]:
