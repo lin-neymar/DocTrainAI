@@ -738,6 +738,7 @@ onUnmounted(() => {
             placeholder="请选择归属部门"
             style="width: 100%"
           />
+          <p class="field-tip">归属部门决定谁可编辑/删除该文档，不影响阅读范围。</p>
         </ElFormItem>
         <ElFormItem v-if="showAudiencePicker" label="可见组织">
           <p class="field-tip">勾选节点后，该节点及下级部门人员可读；不级联勾选子节点。</p>
@@ -818,8 +819,10 @@ onUnmounted(() => {
             placeholder="请选择归属部门"
             style="width: 100%"
           />
+          <p class="field-tip">归属部门决定谁可编辑/删除该文档，不影响阅读范围。</p>
         </ElFormItem>
         <ElFormItem v-if="showAudiencePicker" label="可见组织">
+          <p class="field-tip">勾选节点后，该节点及下级部门人员可读；不级联勾选子节点。</p>
           <div class="audience-tree">
             <ElTree
               v-if="editAudienceTree.length"

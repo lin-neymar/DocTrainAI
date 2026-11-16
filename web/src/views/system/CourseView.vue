@@ -560,6 +560,7 @@ onMounted(async () => {
             placeholder="请选择归属部门"
             style="width: 100%"
           />
+          <p class="field-tip">归属部门决定谁可编辑/删除该课程，不影响阅读范围。</p>
         </ElFormItem>
         <ElFormItem v-if="showAudiencePicker" label="可见组织">
           <p class="field-tip">勾选节点后，该节点及下级部门人员可读；不级联勾选子节点。</p>
