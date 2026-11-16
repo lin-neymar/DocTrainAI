@@ -75,8 +75,9 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 - `get_accessible_dept_ids(user_id) -> list[UUID]`：管理范围。有 `data:scope:all` → 全部未删部门；否则用户所在部门及下级。
 - `get_visible_doc_ids(user_id) -> list[UUID]`：阅读可见文档。规则：
   1. 无 `doc:read` → `[]`
-  2. 用户所在部门落在该文档任一 audience 节点的子树内 → 可见
-  3. **不再**因 `data:scope:all` 自动可见全部文档
+  2. 有 `data:read:all` → 全部未删文档（全公司内容阅读旁路，超管用）
+  3. 用户所在部门落在该文档任一 audience 节点的子树内 → 可见
+  4. `data:scope:all` 只扩管理范围，**不再**旁路阅读
 
 课程列表/详情的可见规则与文档同构（需 `course:read` + audience 子树），可抽公共逻辑。函数放在 `services/system`，供阶段 2 检索调用 `get_visible_doc_ids`。
 
@@ -106,6 +107,7 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 | `system:read`                                                       | 读取可管理的系统品牌（设置页）                |
 | `system:update`                                                     | 修改 T2/T3/T4（显示名、副文案、Logo）         |
 | `data:scope:all`                                                    | 管理范围为全公司；不自动可读全部内容          |
+| `data:read:all`                                                     | 全公司内容阅读旁路（需搭配 doc:read/course:read） |
 | `agent:chat`                                                        | 智能对话（阶段 3）：会话与流式问答            |
 
 `agent:chat` 为阶段 3 新增码：四个内置角色均授予；老库执行 seed 即补种。
@@ -178,7 +180,7 @@ Logo（T4）：单独限制较小体积与图片扩展名（如 png/jpg/webp）�
 
 ## 🔴 阶段 1 测试
 
-pytest 至少覆盖：登录成功与失败、无令牌 401、缺权限码 403、audience 外文档详情/下载/预览 404、有 `doc:read` 且落在 audience 子树内可读、超管无 audience 时亦不可仅凭 `data:scope:all` 读到未授权文档、品牌公开接口可匿名读、无 `system:update` 不能改品牌、登录用户可改本人主题；上传拒绝不在白名单的扩展名。
+pytest 至少覆盖：登录成功与失败、无令牌 401、缺权限码 403、audience 外文档详情/下载/预览 404、有 `doc:read` 且落在 audience 子树内可读、超管凭 `data:read:all` 可读全量文档（仅凭 `data:scope:all` 不可旁路阅读）、品牌公开接口可匿名读、无 `system:update` 不能改品牌、登录用户可改本人主题；上传拒绝不在白名单的扩展名。
 
 ## 🔴 阶段 2 契约（已交付）
 
