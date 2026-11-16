@@ -1,7 +1,8 @@
 """数据范围与内容阅读可见性（方案 B）。
 
 - get_accessible_dept_ids：管理范围（data:scope:all → 全公司，否则本部门及下级）
-- get_visible_doc_ids / get_visible_course_ids：阅读可见（*:read + audience 子树）
+- get_visible_doc_ids / get_visible_course_ids：阅读可见（*:read + audience 子树；
+  data:read:all 旁路）
 - resolve_audience_dept_ids：写路径解析并校验 audience（B1/B3）
 
 只认 permission 码，禁止用角色 code 判断超管/部门官。
@@ -23,6 +24,7 @@ from app.models.system.doc import Doc, DocAudienceDept
 from app.services.system import auth_service
 
 _PERM_SCOPE_ALL = "data:scope:all"
+_PERM_READ_ALL = "data:read:all"
 _PERM_DEPT_CREATE = "dept:create"
 _PERM_DOC_READ = "doc:read"
 _PERM_COURSE_READ = "course:read"
@@ -54,6 +56,18 @@ def _dept_subtree_ids(session: Session, root_id: uuid.UUID) -> list[uuid.UUID]:
 # 实现：列出全部未软删部门 id
 def _all_active_dept_ids(session: Session) -> list[uuid.UUID]:
     stmt = select(Dept.id).where(Dept.is_deleted.is_(False)).order_by(Dept.id)
+    return list(session.scalars(stmt).all())
+
+
+# 实现：列出全部未软删文档 id（data:read:all 旁路用）
+def _all_active_doc_ids(session: Session) -> list[uuid.UUID]:
+    stmt = select(Doc.id).where(Doc.is_deleted.is_(False)).order_by(Doc.id)
+    return list(session.scalars(stmt).all())
+
+
+# 实现：列出全部未软删课程 id（data:read:all 旁路用）
+def _all_active_course_ids(session: Session) -> list[uuid.UUID]:
+    stmt = select(Course.id).where(Course.is_deleted.is_(False)).order_by(Course.id)
     return list(session.scalars(stmt).all())
 
 
@@ -118,12 +132,15 @@ def get_visible_doc_ids(session: Session, user_id: uuid.UUID) -> list[uuid.UUID]
 
     判断顺序：
       1. 没有 doc:read → []
-      2. 用户所在部门落在该文档任一 audience 节点的子树内 → 可见
-      3. 不再因 data:scope:all 自动可见全部文档（B2）
+      2. 有 data:read:all → 全部未删文档（全公司内容阅读旁路，超管用）
+      3. 用户所在部门落在该文档任一 audience 节点的子树内 → 可见
+      4. data:scope:all 只扩管理范围，不旁路阅读（B2）
     """
     permission_codes = auth_service.list_permission_codes_for_user(session, user_id)
     if _PERM_DOC_READ not in permission_codes:
         return []
+    if _PERM_READ_ALL in permission_codes:
+        return _all_active_doc_ids(session)
 
     user = auth_service.get_active_user_by_id(session, user_id)
     if user is None:
@@ -145,10 +162,12 @@ def get_visible_doc_ids(session: Session, user_id: uuid.UUID) -> list[uuid.UUID]
 
 # 实现：计算用户可见的课程 id（course:read + audience 子树；与文档同构）
 def get_visible_course_ids(session: Session, user_id: uuid.UUID) -> list[uuid.UUID]:
-    """返回当前用户可见的未删除课程 id（需 course:read；无 scope:all 旁路）。"""
+    """返回当前用户可见的未删除课程 id（需 course:read；data:read:all 旁路；与文档同构）。"""
     permission_codes = auth_service.list_permission_codes_for_user(session, user_id)
     if _PERM_COURSE_READ not in permission_codes:
         return []
+    if _PERM_READ_ALL in permission_codes:
+        return _all_active_course_ids(session)
 
     user = auth_service.get_active_user_by_id(session, user_id)
     if user is None:

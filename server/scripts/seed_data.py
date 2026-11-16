@@ -46,6 +46,8 @@ PERMISSIONS: Final[list[tuple[str, str]]] = [
     ("agent:chat", "智能对话"),
     # 管理范围开关：全公司；不自动获得全部文档/课程阅读权（方案 B）
     ("data:scope:all", "全公司数据范围"),
+    # 内容阅读旁路：全公司阅读（超管）；需搭配 doc:read / course:read
+    ("data:read:all", "全公司内容阅读"),
 ]
 
 # 旧聚合码：停止绑定；seed 会将其 is_deleted=true（禁止物理删除权限行）
