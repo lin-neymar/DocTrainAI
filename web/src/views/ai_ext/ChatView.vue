@@ -18,6 +18,7 @@ import {
   type Citation,
 } from '@/api/ai_ext/chat'
 import CitationCard from '@/components/ai_ext/CitationCard.vue'
+import IconTrash from '@/components/ai_ext/IconTrash.vue'
 import { formatChatMessageTime, formatDateTime } from '@/utils/datetime'
 
 /** 消息区本地条目：流式期间 id 为 null，done 事件后回填 */
@@ -384,23 +385,7 @@ onMounted(() => {
             title="删除会话"
             @click.stop="onDeleteSession(i, s.id)"
           >
-            <svg
-              viewBox="0 0 24 24"
-              width="15"
-              height="15"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M3 6h18" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              <line x1="10" y1="11" x2="10" y2="17" />
-              <line x1="14" y1="11" x2="14" y2="17" />
-            </svg>
+            <IconTrash />
           </button>
         </div>
       </div>
@@ -484,21 +469,7 @@ onMounted(() => {
                     class="meta-btn meta-btn-danger"
                     @click="enterDeleteMode(m.id)"
                   >
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="16"
-                      height="16"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M3 6h18" />
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    </svg>
+                    <IconTrash />
                   </button>
                 </ElTooltip>
               </div>
@@ -739,13 +710,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.message-body:hover .meta-actions,
-.message-meta:focus-within .meta-actions {
-  opacity: 1;
 }
 
 .meta-btn {
