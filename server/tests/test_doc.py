@@ -450,3 +450,76 @@ def test_upload_and_update_audience_within_owner_subtree(
     )
     assert moved.status_code == 404
     assert moved.json()["code"] == 40400
+
+
+def test_list_resolves_cross_scope_dept_names(admin_headers: dict[str, str]) -> None:
+    """跨范围名称解析：归属/可见组织含总公司时，分公司用户列表也能看到中文名而非 id。"""
+    import json
+
+    password = "staffpass3"
+    with SessionLocal() as session:
+        root = session.scalar(
+            select(Dept).where(Dept.parent_id.is_(None), Dept.is_deleted.is_(False))
+        )
+        assert root is not None
+        branch = Dept(name=f"NameB-{uuid.uuid4().hex[:6]}", parent_id=root.id)
+        session.add(branch)
+        session.flush()
+        staff_role = session.scalar(
+            select(Role).where(Role.code == "staff", Role.is_deleted.is_(False))
+        )
+        assert staff_role is not None
+        username = f"staff_name_{uuid.uuid4().hex[:8]}"
+        user = User(
+            username=username,
+            password_hash=bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
+            dept_id=branch.id,
+            is_deleted=False,
+        )
+        session.add(user)
+        session.flush()
+        session.add(UserRole(user_id=user.id, role_id=staff_role.id))
+        session.commit()
+        root_id = str(root.id)
+        root_name = root.name
+        branch_id = str(branch.id)
+        branch_name = branch.name
+
+    # 归属=总公司，可见组织=总公司+分公司 → 分公司用户的数据范围树里没有总公司
+    created = client.post(
+        "/api/v1/docs",
+        headers=admin_headers,
+        data={
+            "title": f"cross-name-{uuid.uuid4().hex[:6]}",
+            "dept_id": root_id,
+            "audience_dept_ids": json.dumps([root_id, branch_id]),
+        },
+        files={"file": ("n.md", _MD_BYTES, "text/markdown")},
+    )
+    assert created.status_code == 200
+    body = created.json()["data"]
+    doc_id = body["id"]
+    id_to_name = {root_id: root_name, branch_id: branch_name}
+    assert body["dept_name"] == root_name
+    # audience_dept_ids 按 UUID 排序返回，名称须与 id 同序
+    assert body["audience_dept_names"] == [
+        id_to_name[i] for i in body["audience_dept_ids"]
+    ]
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": username, "password": password},
+    )
+    assert login.status_code == 200
+    staff_headers = {
+        "Authorization": f"Bearer {login.json()['data']['access_token']}"
+    }
+
+    listed = client.get("/api/v1/docs", headers=staff_headers)
+    assert listed.status_code == 200
+    items = listed.json()["data"]["items"]
+    item = next(i for i in items if i["id"] == doc_id)
+    assert item["dept_name"] == root_name
+    assert item["audience_dept_names"] == [
+        id_to_name[i] for i in item["audience_dept_ids"]
+    ]
