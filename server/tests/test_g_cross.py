@@ -1,8 +1,8 @@
 """S7 / G：阶段 1 交叉补测（对齐 SERVER_SPEC「阶段 1 测试」清单）。
 
 覆盖：登录与 401、缺码 403、audience 外 404、audience 子树可读、
-scope:all 不旁路阅读、挂课不越权、品牌公开、无 system:update 不能改品牌、
-本人主题、四角色权限抽检。不引入阶段 2 依赖。
+仅 data:scope:all 不旁路阅读、data:read:all 旁路全量阅读、挂课不越权、品牌公开、
+无 system:update 不能改品牌、本人主题、四角色权限抽检。不引入阶段 2 依赖。
 """
 
 from __future__ import annotations
@@ -163,8 +163,14 @@ def test_g_audience_outside_404_and_subtree_readable(seeded: None) -> None:
     username = f"g_aud_{uuid.uuid4().hex[:8]}"
     _create_user_with_role(username=username, role_code="staff", dept_id=branch_id)
     staff = _login(username, _PASSWORD)
+    # 公司管理员（无 data:read:all）在根：audience 不覆盖根时读不到
+    comp_username = f"g_comp_{uuid.uuid4().hex[:8]}"
+    _create_user_with_role(
+        username=comp_username, role_code="company_admin", dept_id=root_id
+    )
+    comp_admin = _login(comp_username, _PASSWORD)
 
-    # audience 仅分公司 → 员工可读，根上超管不可读（B2）
+    # audience 仅分公司 → 员工可读；无 read:all 的公司管理员不可读；超管凭 data:read:all 可读
     created = client.post(
         "/api/v1/docs",
         headers=admin,
@@ -178,21 +184,22 @@ def test_g_audience_outside_404_and_subtree_readable(seeded: None) -> None:
     assert created.status_code == 200
     doc_id = created.json()["data"]["id"]
 
-    assert client.get(f"/api/v1/docs/{doc_id}", headers=admin).status_code == 404
     assert client.get(f"/api/v1/docs/{doc_id}", headers=staff).status_code == 200
+    assert client.get(f"/api/v1/docs/{doc_id}", headers=comp_admin).status_code == 404
+    assert client.get(f"/api/v1/docs/{doc_id}", headers=admin).status_code == 200
 
-    # 扩到根后超管可读
+    # 扩到根后公司管理员可读
     upd = client.put(
         f"/api/v1/docs/{doc_id}",
         headers=admin,
         json={"audience_dept_ids": [root_id]},
     )
     assert upd.status_code == 200
-    assert client.get(f"/api/v1/docs/{doc_id}", headers=admin).status_code == 200
+    assert client.get(f"/api/v1/docs/{doc_id}", headers=comp_admin).status_code == 200
 
 
-def test_g_scope_all_does_not_bypass_missing_audience(seeded: None) -> None:
-    """超管仅有 data:scope:all，audience 未覆盖其所在部门 → 404。"""
+def test_g_read_all_bypasses_audience(seeded: None) -> None:
+    """超管有 data:read:all：audience 未覆盖其所在部门也可读。"""
     admin = _admin_headers()
     root_id, branch_id = _root_and_branch()
     created = client.post(
@@ -207,7 +214,7 @@ def test_g_scope_all_does_not_bypass_missing_audience(seeded: None) -> None:
     )
     assert created.status_code == 200
     doc_id = created.json()["data"]["id"]
-    assert client.get(f"/api/v1/docs/{doc_id}", headers=admin).status_code == 404
+    assert client.get(f"/api/v1/docs/{doc_id}", headers=admin).status_code == 200
 
 
 # --- 挂课不越权 ---
@@ -229,12 +236,18 @@ def test_g_attach_doc_must_be_visible_to_operator(seeded: None) -> None:
     )
     assert created_doc.status_code == 200
     doc_id = created_doc.json()["data"]["id"]
-    # 超管自己也读不到该文档
-    assert client.get(f"/api/v1/docs/{doc_id}", headers=admin).status_code == 404
+
+    # 无 data:read:all 的公司管理员在根：audience 仅分公司 → 读不到该文档
+    comp_username = f"g_att_{uuid.uuid4().hex[:8]}"
+    _create_user_with_role(
+        username=comp_username, role_code="company_admin", dept_id=root_id
+    )
+    comp_admin = _login(comp_username, _PASSWORD)
+    assert client.get(f"/api/v1/docs/{doc_id}", headers=comp_admin).status_code == 404
 
     course = client.post(
         "/api/v1/courses",
-        headers=admin,
+        headers=comp_admin,
         json={
             "title": f"g-course-{uuid.uuid4().hex[:6]}",
             "dept_id": root_id,
@@ -246,7 +259,7 @@ def test_g_attach_doc_must_be_visible_to_operator(seeded: None) -> None:
 
     attach = client.put(
         f"/api/v1/courses/{course_id}/docs",
-        headers=admin,
+        headers=comp_admin,
         json={"doc_ids": [doc_id]},
     )
     assert attach.status_code == 404
@@ -305,9 +318,11 @@ def test_g_four_roles_permission_spot_check(seeded: None) -> None:
         got = set(me.json()["data"]["permission_codes"])
         assert got == want, f"{role_code}: missing={want - got} extra={got - want}"
 
-    # 关键断言：公司官无 system:* / scope:all；部门官无 dept 写与配权；员工仅三码
+    # 关键断言：公司官无 system:* / scope:all / read:all；部门官无 dept 写与配权；员工仅四码
     assert "system:update" not in expected["company_admin"]
     assert "data:scope:all" not in expected["company_admin"]
+    assert "data:read:all" not in expected["company_admin"]
+    assert "data:read:all" in expected["super_admin"]
     assert "dept:create" not in expected["dept_admin"]
     assert "role:assign_perm" not in expected["dept_admin"]
     assert expected["staff"] == {"dept:read", "doc:read", "course:read", "agent:chat"}

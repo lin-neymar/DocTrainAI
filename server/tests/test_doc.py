@@ -298,7 +298,7 @@ def test_preview_md_and_docx_mock(
 
 
 def test_staff_cannot_see_other_branch_doc(admin_headers: dict[str, str]) -> None:
-    """audience 仅兄弟部门 B：员工 A 与根上超管均不可读（B2，无 scope:all 旁路）。"""
+    """audience 仅兄弟部门 B：员工 A 不可读（404）；超管凭 data:read:all 可读。"""
     password = "staffpass1"
     with SessionLocal() as session:
         root = session.scalar(
@@ -352,10 +352,10 @@ def test_staff_cannot_see_other_branch_doc(admin_headers: dict[str, str]) -> Non
     assert resp.status_code == 404
     assert resp.json()["code"] == 40400
 
-    # 超管有 data:scope:all 也不能仅凭该码读到（B2）
+    # 超管凭 data:read:all 可读，不受 audience 限制
     admin_outside = client.get(f"/api/v1/docs/{doc_id}", headers=admin_headers)
-    assert admin_outside.status_code == 404
-    assert admin_outside.json()["code"] == 40400
+    assert admin_outside.status_code == 200
+    assert admin_outside.json()["code"] == 0
 
 
 def test_upload_and_update_audience_within_owner_subtree(
@@ -391,7 +391,7 @@ def test_upload_and_update_audience_within_owner_subtree(
         root_id = str(root.id)
         branch_id = str(branch.id)
 
-    # 归属根 + audience=分公司 → 分公司员工可读；根上超管不可读（不在该节点子树）
+    # 归属根 + audience=分公司 → 分公司员工可读；超管凭 data:read:all 也可读
     created = client.post(
         "/api/v1/docs",
         headers=admin_headers,
@@ -407,7 +407,8 @@ def test_upload_and_update_audience_within_owner_subtree(
     assert body["audience_dept_ids"] == [branch_id]
     doc_id = body["id"]
 
-    assert client.get(f"/api/v1/docs/{doc_id}", headers=admin_headers).status_code == 404
+    # 超管凭 data:read:all 可读，不受 audience 限制
+    assert client.get(f"/api/v1/docs/{doc_id}", headers=admin_headers).status_code == 200
 
     login = client.post(
         "/api/v1/auth/login",
@@ -419,7 +420,7 @@ def test_upload_and_update_audience_within_owner_subtree(
     }
     assert client.get(f"/api/v1/docs/{doc_id}", headers=staff_headers).status_code == 200
 
-    # 把 audience 改回根 → 超管可读，员工仍可读（员工部门在根子树内）
+    # 把 audience 改回根 → 全公司可读（员工仍可读，员工部门在根子树内）
     updated = client.put(
         f"/api/v1/docs/{doc_id}",
         headers=admin_headers,

@@ -57,6 +57,7 @@ def test_list_permissions_from_db(admin_headers: dict[str, str]) -> None:
     assert "role:assign_perm" in codes
     assert "role:read" in codes
     assert "data:scope:all" in codes
+    assert "data:read:all" in codes
     assert "user:manage" not in codes
 
     assert len(codes) >= 9

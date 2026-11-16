@@ -9,7 +9,8 @@ from sqlalchemy import select
 from app.database import SessionLocal
 from app.models.system.course import Course, CourseAudienceDept
 from app.models.system.dept import Dept
-from app.models.system.role import Role
+from app.models.system.permission import Permission
+from app.models.system.role import Role, RolePermission
 from app.models.system.user import User, UserRole
 from app.services.system import scope_service
 from scripts.seed import run_seed
@@ -92,7 +93,8 @@ def test_staff_sees_course_in_audience_subtree(seeded_session) -> None:
     assert c_b.id not in visible
 
 
-def test_scope_all_alone_does_not_reveal_course(seeded_session) -> None:
+def test_scope_all_without_read_all_does_not_reveal_course(seeded_session) -> None:
+    """仅 data:scope:all + course:read（无 data:read:all）→ 不旁路；超管凭 read:all 可见。"""
     session = seeded_session
     admin = session.scalar(select(User).where(User.username == "admin"))
     assert admin is not None
@@ -109,7 +111,35 @@ def test_scope_all_alone_does_not_reveal_course(seeded_session) -> None:
     course = _create_course(
         session, title="hidden-course", dept_id=leaf.id, audience_dept_ids=[leaf.id]
     )
+
+    # 自定义角色：course:read + data:scope:all，但不含 data:read:all
+    role = Role(
+        code=f"scope_only_{uuid.uuid4().hex[:8]}", name="范围角色", is_deleted=False
+    )
+    session.add(role)
+    session.flush()
+    for code in ("course:read", "data:scope:all"):
+        perm = session.scalar(
+            select(Permission).where(
+                Permission.code == code, Permission.is_deleted.is_(False)
+            )
+        )
+        assert perm is not None
+        session.add(RolePermission(role_id=role.id, permission_id=perm.id))
+    user = User(
+        username=f"scopeonly_sc_{uuid.uuid4().hex[:8]}",
+        password_hash=_hash_password("pass"),
+        dept_id=root.id,
+        is_deleted=False,
+    )
+    session.add(user)
+    session.flush()
+    session.add(UserRole(user_id=user.id, role_id=role.id))
     session.commit()
 
-    visible = set(scope_service.get_visible_course_ids(session, admin.id))
+    visible = set(scope_service.get_visible_course_ids(session, user.id))
     assert course.id not in visible
+
+    # 超管有 data:read:all → 旁路可见
+    admin_visible = set(scope_service.get_visible_course_ids(session, admin.id))
+    assert course.id in admin_visible

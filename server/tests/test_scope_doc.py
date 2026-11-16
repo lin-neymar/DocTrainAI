@@ -9,7 +9,8 @@ from sqlalchemy import select
 from app.database import SessionLocal
 from app.models.system.dept import Dept
 from app.models.system.doc import Doc, DocAudienceDept
-from app.models.system.role import Role
+from app.models.system.permission import Permission
+from app.models.system.role import Role, RolePermission
 from app.models.system.user import User, UserRole
 from app.services.system import scope_service
 from scripts.seed import run_seed
@@ -56,8 +57,8 @@ def seeded_session():
         pytest.skip(f"PostgreSQL 或迁移未就绪: {exc}")
 
 
-def test_admin_sees_docs_when_audience_covers_root(seeded_session) -> None:
-    """超管在根：仅当 audience 覆盖根（或其祖先）时可见；不靠 scope:all。"""
+def test_admin_sees_all_docs_with_read_all(seeded_session) -> None:
+    """超管在根：有 data:read:all → 不依赖 audience 覆盖，全部文档可见。"""
     session = seeded_session
     admin = session.scalar(select(User).where(User.username == "admin"))
     assert admin is not None
@@ -78,7 +79,7 @@ def test_admin_sees_docs_when_audience_covers_root(seeded_session) -> None:
         uploaded_by=admin.id,
         audience_dept_ids=[root.id],
     )
-    # audience 仅 child → 根上超管不可见（B2）
+    # audience 仅 child → 超管凭 data:read:all 仍可见
     d_child_only = _create_doc(
         session,
         title="ec-child-only",
@@ -90,7 +91,7 @@ def test_admin_sees_docs_when_audience_covers_root(seeded_session) -> None:
 
     visible = set(scope_service.get_visible_doc_ids(session, admin.id))
     assert d_root_aud.id in visible
-    assert d_child_only.id not in visible
+    assert d_child_only.id in visible
 
 
 def test_staff_sees_docs_in_audience_subtree(seeded_session) -> None:
@@ -148,8 +149,8 @@ def test_staff_sees_docs_in_audience_subtree(seeded_session) -> None:
     assert doc_b.id not in visible
 
 
-def test_scope_all_alone_does_not_reveal_doc(seeded_session) -> None:
-    """有 data:scope:all + doc:read，但 audience 未覆盖其所在部门 → 仍不可见。"""
+def test_scope_all_without_read_all_does_not_reveal_doc(seeded_session) -> None:
+    """仅 data:scope:all + doc:read（无 data:read:all）→ 仍不可旁路阅读（B2）。"""
     session = seeded_session
     admin = session.scalar(select(User).where(User.username == "admin"))
     assert admin is not None
@@ -168,10 +169,38 @@ def test_scope_all_alone_does_not_reveal_doc(seeded_session) -> None:
         uploaded_by=admin.id,
         audience_dept_ids=[leaf.id],
     )
+
+    # 自定义角色：doc:read + data:scope:all，但不含 data:read:all
+    role = Role(
+        code=f"scope_only_{uuid.uuid4().hex[:8]}", name="范围角色", is_deleted=False
+    )
+    session.add(role)
+    session.flush()
+    for code in ("doc:read", "data:scope:all"):
+        perm = session.scalar(
+            select(Permission).where(
+                Permission.code == code, Permission.is_deleted.is_(False)
+            )
+        )
+        assert perm is not None
+        session.add(RolePermission(role_id=role.id, permission_id=perm.id))
+    user = User(
+        username=f"scopeonly_{uuid.uuid4().hex[:8]}",
+        password_hash=_hash_password("pass"),
+        dept_id=root.id,
+        is_deleted=False,
+    )
+    session.add(user)
+    session.flush()
+    session.add(UserRole(user_id=user.id, role_id=role.id))
     session.commit()
 
-    visible = set(scope_service.get_visible_doc_ids(session, admin.id))
+    visible = set(scope_service.get_visible_doc_ids(session, user.id))
     assert doc.id not in visible
+
+    # 超管有 data:read:all → 旁路可见
+    admin_visible = set(scope_service.get_visible_doc_ids(session, admin.id))
+    assert doc.id in admin_visible
 
 
 def test_user_without_doc_read_sees_no_docs(seeded_session) -> None:

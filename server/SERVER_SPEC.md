@@ -92,23 +92,23 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 
 阶段 1 注册下列权限码（`资源:动作`）。旧码 `user:manage`、`dept:manage`、`role:manage`、`doc:upload`、`course:manage` **停止种子绑定并软删/停用**，不再授予任何内置角色。
 
-| code                                                                | 含义                                          |
-| ------------------------------------------------------------------- | --------------------------------------------- |
-| `dept:read`                                                         | 部门列表/树/详情                              |
-| `dept:create` / `dept:update` / `dept:delete`                       | 部门写                                        |
-| `user:read` / `user:create` / `user:update` / `user:delete`         | 用户读写删                                    |
-| `user:reset_password`                                               | 重置他人密码                                  |
-| `role:read`                                                         | 角色列表/详情；供用户表单勾选角色             |
-| `role:create` / `role:update` / `role:delete`                       | 角色写                                        |
-| `role:assign_perm`                                                  | 替换角色权限；`GET /permissions`              |
-| `doc:read` / `doc:create` / `doc:update` / `doc:delete`             | 文档（create=上传；update=元数据与 audience） |
-| `course:read` / `course:create` / `course:update` / `course:delete` | 课程                                          |
-| `course:attach_doc`                                                 | 挂接文档                                      |
-| `system:read`                                                       | 读取可管理的系统品牌（设置页）                |
-| `system:update`                                                     | 修改 T2/T3/T4（显示名、副文案、Logo）         |
-| `data:scope:all`                                                    | 管理范围为全公司；不自动可读全部内容          |
+| code                                                                | 含义                                              |
+| ------------------------------------------------------------------- | ------------------------------------------------- |
+| `dept:read`                                                         | 部门列表/树/详情                                  |
+| `dept:create` / `dept:update` / `dept:delete`                       | 部门写                                            |
+| `user:read` / `user:create` / `user:update` / `user:delete`         | 用户读写删                                        |
+| `user:reset_password`                                               | 重置他人密码                                      |
+| `role:read`                                                         | 角色列表/详情；供用户表单勾选角色                 |
+| `role:create` / `role:update` / `role:delete`                       | 角色写                                            |
+| `role:assign_perm`                                                  | 替换角色权限；`GET /permissions`                  |
+| `doc:read` / `doc:create` / `doc:update` / `doc:delete`             | 文档（create=上传；update=元数据与 audience）     |
+| `course:read` / `course:create` / `course:update` / `course:delete` | 课程                                              |
+| `course:attach_doc`                                                 | 挂接文档                                          |
+| `system:read`                                                       | 读取可管理的系统品牌（设置页）                    |
+| `system:update`                                                     | 修改 T2/T3/T4（显示名、副文案、Logo）             |
+| `data:scope:all`                                                    | 管理范围为全公司；不自动可读全部内容              |
 | `data:read:all`                                                     | 全公司内容阅读旁路（需搭配 doc:read/course:read） |
-| `agent:chat`                                                        | 智能对话（阶段 3）：会话与流式问答            |
+| `agent:chat`                                                        | 智能对话（阶段 3）：会话与流式问答                |
 
 `agent:chat` 为阶段 3 新增码：四个内置角色均授予；老库执行 seed 即补种。
 

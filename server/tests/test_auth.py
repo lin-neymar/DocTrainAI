@@ -43,6 +43,7 @@ def test_login_success_and_me() -> None:
     assert "超级管理员" in me_data["role_names"]
     codes = me_data["permission_codes"]
     assert "data:scope:all" in codes
+    assert "data:read:all" in codes
     assert "system:update" in codes
     assert "dept:create" in codes
     assert "user:manage" not in codes
