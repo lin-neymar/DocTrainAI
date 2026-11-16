@@ -163,6 +163,13 @@ onMounted(() => {
   overflow: auto;
   border-right: none;
   background: transparent;
+  /* 选中文字色与 hover 保持一致（EP 默认 active 为主题色文字） */
+  --el-menu-active-color: var(--el-menu-text-color);
+}
+
+/* 选中项补上与 hover 相同的浅色背景，随主题色自动变化 */
+.menu :deep(.el-menu-item.is-active) {
+  background-color: var(--el-menu-hover-bg-color);
 }
 
 .main-wrap {
