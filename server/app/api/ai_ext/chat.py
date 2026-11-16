@@ -13,7 +13,12 @@ from app.core.deps import require_permission
 from app.core.response import success
 from app.database import get_db
 from app.models.system.user import User
-from app.schemas.ai_ext.chat import ChatMessageOut, ChatSessionOut, MessageCreate
+from app.schemas.ai_ext.chat import (
+    ChatMessageOut,
+    ChatSessionOut,
+    MessageBatchDelete,
+    MessageCreate,
+)
 from app.schemas.common import page_data
 from app.services.ai_ext import chat_service
 
@@ -101,6 +106,30 @@ def send_message(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.delete(
+    "/sessions/{session_id}/messages",
+    summary="批量删除消息",
+    description=(
+        "硬删除指定消息；删 user 必连带下一条 assistant，删 assistant 必连带前一条 user。"
+        "他人会话或消息不属于该会话 404。需要 agent:chat。"
+    ),
+)
+def delete_messages(
+    session_id: UUID,
+    body: MessageBatchDelete,
+    current_user: Annotated[User, Depends(require_permission("agent:chat"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    deleted = chat_service.delete_messages(
+        db,
+        user_id=current_user.id,
+        session_id=session_id,
+        message_ids=body.message_ids,
+    )
+    db.commit()
+    return success({"deleted_count": deleted})
 
 
 @router.delete(

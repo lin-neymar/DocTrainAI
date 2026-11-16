@@ -12,6 +12,10 @@ class MessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
 
 
+class MessageBatchDelete(BaseModel):
+    message_ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
 class ChatSessionOut(BaseModel):
     id: UUID
     created_at: datetime

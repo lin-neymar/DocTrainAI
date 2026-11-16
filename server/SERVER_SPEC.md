@@ -223,7 +223,7 @@ SSE 事件只用这四种：
 
 - `delta`：`{"text": "..."}`
 - `citation`：一条引用对象
-- `done`：`{"message_id": "...", "refused": false}`
+- `done`：`{"message_id": "...", "user_message_id": "...", "refused": false}`
 - `error`：`{"message": "..."}`
 
 对话接口需要 `agent:chat`。引用的文档仍必须属于该用户的可见集合。
@@ -250,6 +250,7 @@ SSE 事件只用这四种：
 - `GET /chat/sessions`：当前用户会话列表，分页（默认 20，最大 100），按 `updated_at` 倒序。
 - `GET /chat/sessions/{id}/messages`：会话消息（含引用），按时间正序。
 - `POST /chat/sessions/{id}/messages`：发送消息，body 为 `{"content": "..."}`；SSE 流式返回。
+- `DELETE /chat/sessions/{id}/messages`：批量硬删除消息，body `{"message_ids": ["..."]}`；删 user 连带相邻 assistant，删 assistant 连带前一条 user；他人会话或消息不属于该会话 404。
 - `DELETE /chat/sessions/{id}`：软删除会话（消息与调用日志保留）；他人会话 404，返回统一响应体。
 
 ### 阶段 3 SSE 细节
@@ -258,7 +259,7 @@ SSE 事件只用这四种：
 
 - `citation`：一条引用对象（结构同消息 `citations` 元素），存在引用时先于 `delta` 发送。
 - `delta`：`{"text": "片段"}`，逐段追加；拒答不发 `delta`。
-- `done`：`{"message_id": "...", "refused": false}`。
+- `done`：`{"message_id": "...", "user_message_id": "...", "refused": false}`。
 - `error`：`{"message": "..."}`，中断性错误后关闭流。
 
 401 / 403 / 404 / 422 发生在建流之前，走统一 JSON 响应。流结束后用户消息与助手消息落库：拒答时助手消息 `content` 为 `ABSTAIN_MESSAGE`、`refused = true`、无引用；每次回答写一条 `chat_call_log`。

@@ -13,9 +13,10 @@ import queue
 import threading
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Iterator
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -84,6 +85,66 @@ def list_messages(db: Session, session_id: uuid.UUID) -> list[ChatMessage]:
             .order_by(ChatMessage.created_at)
         ).all()
     )
+
+
+def _pair_maps(
+    messages: list[ChatMessage],
+) -> tuple[dict[uuid.UUID, uuid.UUID], dict[uuid.UUID, uuid.UUID]]:
+    """相邻 user→assistant 配对（与前端一轮对话定义一致）。"""
+    user_to_assistant: dict[uuid.UUID, uuid.UUID] = {}
+    assistant_to_user: dict[uuid.UUID, uuid.UUID] = {}
+    for i, message in enumerate(messages):
+        if message.role != CHAT_ROLE_USER:
+            continue
+        if i + 1 >= len(messages):
+            continue
+        nxt = messages[i + 1]
+        if nxt.role == CHAT_ROLE_ASSISTANT:
+            user_to_assistant[message.id] = nxt.id
+            assistant_to_user[nxt.id] = message.id
+    return user_to_assistant, assistant_to_user
+
+
+def expand_message_ids_for_delete(
+    message_ids: list[uuid.UUID], messages: list[ChatMessage]
+) -> set[uuid.UUID]:
+    """删问题必删回答、删回答必删问题：闭包扩展选中集。"""
+    user_to_assistant, assistant_to_user = _pair_maps(messages)
+    expanded: set[uuid.UUID] = set()
+    for mid in message_ids:
+        expanded.add(mid)
+        partner = user_to_assistant.get(mid) or assistant_to_user.get(mid)
+        if partner is not None:
+            expanded.add(partner)
+    return expanded
+
+
+def delete_messages(
+    db: Session,
+    *,
+    user_id: uuid.UUID,
+    session_id: uuid.UUID,
+    message_ids: list[uuid.UUID],
+) -> int:
+    get_owned_session(db, user_id, session_id)
+    all_messages = list_messages(db, session_id)
+    known_ids = {m.id for m in all_messages}
+    for mid in message_ids:
+        if mid not in known_ids:
+            raise NotFoundError()
+    expanded = expand_message_ids_for_delete(message_ids, all_messages)
+    if not expanded:
+        return 0
+    db.execute(
+        delete(ChatMessage).where(
+            ChatMessage.session_id == session_id,
+            ChatMessage.id.in_(expanded),
+        )
+    )
+    chat_session = get_owned_session(db, user_id, session_id)
+    chat_session.updated_at = datetime.now(timezone.utc)
+    db.flush()
+    return len(expanded)
 
 
 # 实现：取最近 N 条历史（MEMORY_TURNS_MESSAGES），按时间正序返回
@@ -186,7 +247,7 @@ def stream_chat(
         return
 
     result = outcome["result"]
-    _save_message(
+    user_message = _save_message(
         db,
         session_id=session_id,
         role=CHAT_ROLE_USER,
@@ -212,4 +273,11 @@ def stream_chat(
     )
     db.commit()
     # done 必须是最后一个事件：先落库拿到 message_id 再发送
-    yield _sse("done", {"message_id": str(message.id), "refused": result["refused"]})
+    yield _sse(
+        "done",
+        {
+            "message_id": str(message.id),
+            "user_message_id": str(user_message.id),
+            "refused": result["refused"],
+        },
+    )

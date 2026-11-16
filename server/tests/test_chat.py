@@ -200,6 +200,7 @@ def test_send_message_streams_sse_and_persists(admin_headers, monkeypatch) -> No
     idx_done = body.index("event: done")
     assert idx_citation < idx_delta < idx_done
     assert '"员工手册"' in body
+    assert '"user_message_id"' in body
 
     # 落库断言：用户消息 + 助手消息（含引用）+ 一条调用日志
     with SessionLocal() as session:
@@ -308,6 +309,87 @@ def test_delete_other_user_session_returns_404(admin_headers) -> None:
     other = _login(username, password)
 
     resp = client.delete(f"/api/v1/chat/sessions/{session_id}", headers=other)
+    assert resp.status_code == 404
+
+
+def _send_one_turn(admin_headers, session_id: str, monkeypatch, question: str = "你好") -> None:
+    def fake_run_agent(
+        session, *, user_id, question, history, on_token=None, on_citation=None
+    ):
+        if on_token:
+            on_token("好的")
+        return {"answer": "好的", "refused": False, "citations": [], "chunk_ids": []}
+
+    monkeypatch.setattr(chat_service, "run_agent", fake_run_agent)
+    resp = client.post(
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={"content": question},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 200
+
+
+def test_delete_messages_expands_user_assistant_pair(admin_headers, monkeypatch) -> None:
+    """只传 user message_id 时连带删除配对 assistant。"""
+    resp = client.post("/api/v1/chat/sessions", headers=admin_headers)
+    session_id = resp.json()["data"]["id"]
+    _send_one_turn(admin_headers, session_id, monkeypatch, "第一轮")
+    _send_one_turn(admin_headers, session_id, monkeypatch, "第二轮")
+
+    with SessionLocal() as session:
+        messages = session.scalars(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.created_at)
+        ).all()
+        assert len(messages) == 4
+        first_user_id = str(messages[0].id)
+
+    resp = client.request(
+        "DELETE",
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={"message_ids": [first_user_id]},
+        headers=admin_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["data"]["deleted_count"] == 2
+
+    with SessionLocal() as session:
+        remaining = session.scalars(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.created_at)
+        ).all()
+        assert len(remaining) == 2
+        assert remaining[0].content == "第二轮"
+        assert remaining[1].content == "好的"
+
+    resp = client.get(
+        f"/api/v1/chat/sessions/{session_id}/messages", headers=admin_headers
+    )
+    assert len(resp.json()["data"]) == 2
+
+
+def test_delete_messages_foreign_id_returns_404(admin_headers, monkeypatch) -> None:
+    """消息不属于该会话（或不存在）时 404。"""
+    resp = client.post("/api/v1/chat/sessions", headers=admin_headers)
+    session_id = resp.json()["data"]["id"]
+    resp2 = client.post("/api/v1/chat/sessions", headers=admin_headers)
+    other_session_id = resp2.json()["data"]["id"]
+    _send_one_turn(admin_headers, other_session_id, monkeypatch)
+
+    with SessionLocal() as session:
+        foreign = session.scalars(
+            select(ChatMessage).where(ChatMessage.session_id == other_session_id)
+        ).first()
+        foreign_id = str(foreign.id)
+
+    resp = client.request(
+        "DELETE",
+        f"/api/v1/chat/sessions/{session_id}/messages",
+        json={"message_ids": [foreign_id]},
+        headers=admin_headers,
+    )
     assert resp.status_code == 404
 
 

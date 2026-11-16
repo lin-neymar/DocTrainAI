@@ -13,3 +13,15 @@ export function formatDateTime(value?: string | null): string {
     `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
   )
 }
+
+/** 对话消息时间：2026.09.10 11:22（本地时区，无秒） */
+export function formatChatMessageTime(value?: string | null): string {
+  if (!value) return ''
+  const date = new Date(value.trim())
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return (
+    `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  )
+}

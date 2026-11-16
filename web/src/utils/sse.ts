@@ -10,7 +10,7 @@ import { getToken } from '@/utils/token'
 export type SseEvent =
   | { type: 'delta'; text: string }
   | { type: 'citation'; citation: Citation }
-  | { type: 'done'; messageId: string; refused: boolean }
+  | { type: 'done'; messageId: string; userMessageId: string; refused: boolean }
   | { type: 'error'; message: string }
 
 export interface SseRequestOptions {
@@ -36,6 +36,7 @@ function parseFrame(eventName: string | undefined, data: string | undefined): Ss
         return {
           type: 'done',
           messageId: String(payload.message_id ?? ''),
+          userMessageId: String(payload.user_message_id ?? ''),
           refused: Boolean(payload.refused),
         }
       case 'error':

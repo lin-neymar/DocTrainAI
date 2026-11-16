@@ -5,10 +5,11 @@
  * error 展示错误并可重试；发送中禁止再次发送与切换会话。
  */
 import { nextTick, onMounted, reactive, ref } from 'vue'
-import { ElButton, ElEmpty, ElInput, ElMessage, ElMessageBox, ElTag } from 'element-plus'
+import { ElButton, ElCheckbox, ElEmpty, ElInput, ElMessage, ElMessageBox, ElTag, ElTooltip } from 'element-plus'
 
 import {
   createSessionApi,
+  deleteMessagesApi,
   deleteSessionApi,
   listMessagesApi,
   listSessionsApi,
@@ -17,7 +18,7 @@ import {
   type Citation,
 } from '@/api/ai_ext/chat'
 import CitationCard from '@/components/ai_ext/CitationCard.vue'
-import { formatDateTime } from '@/utils/datetime'
+import { formatChatMessageTime, formatDateTime } from '@/utils/datetime'
 
 /** 消息区本地条目：流式期间 id 为 null，done 事件后回填 */
 interface UiMessage {
@@ -27,6 +28,7 @@ interface UiMessage {
   refused: boolean
   citations: Citation[]
   streaming: boolean
+  created_at?: string | null
   /** error 后待重试的用户原文 */
   retryText?: string
   /** error 文案 */
@@ -39,6 +41,8 @@ const activeSessionId = ref<string | null>(null)
 const messages = ref<UiMessage[]>([])
 const input = ref('')
 const sending = ref(false)
+const deleteMode = ref(false)
+const selectedIds = ref<Set<string>>(new Set())
 const listRef = ref<HTMLElement | null>(null)
 
 // 流式跟随标志：发送后置 true，用户滚动离开底部即置 false 交还控制权
@@ -67,8 +71,53 @@ function onListScroll() {
   }
 }
 
+function exitDeleteMode() {
+  deleteMode.value = false
+  selectedIds.value = new Set()
+}
+
+function buildPairMaps(msgs: UiMessage[]) {
+  const userToAssistant = new Map<string, string>()
+  const assistantToUser = new Map<string, string>()
+  for (let i = 0; i < msgs.length; i++) {
+    const cur = msgs[i]
+    if (cur?.role !== 'user' || !cur.id) continue
+    const nxt = msgs[i + 1]
+    if (nxt?.role === 'assistant' && nxt.id) {
+      userToAssistant.set(cur.id, nxt.id)
+      assistantToUser.set(nxt.id, cur.id)
+    }
+  }
+  return { userToAssistant, assistantToUser }
+}
+
+function expandSelectedIds(ids: Iterable<string>): Set<string> {
+  const { userToAssistant, assistantToUser } = buildPairMaps(messages.value)
+  const out = new Set<string>()
+  for (const id of ids) {
+    out.add(id)
+    const partner = userToAssistant.get(id) ?? assistantToUser.get(id)
+    if (partner) out.add(partner)
+  }
+  return out
+}
+
+function isMessageSelected(m: UiMessage): boolean {
+  return Boolean(m.id && selectedIds.value.has(m.id))
+}
+
+function showMessageMeta(m: UiMessage): boolean {
+  return !m.streaming && Boolean(m.content || m.created_at)
+}
+
+function canDeleteMessage(m: UiMessage): boolean {
+  return Boolean(m.id && !m.streaming && !m.error)
+}
+
 // 实现：切换会话并加载历史（时间正序）
 async function switchSession(id: string) {
+  if (sending.value || deleteMode.value) return
+  exitDeleteMode()
   activeSessionId.value = id
   const data = await listMessagesApi(id)
   messages.value = data.map((m) => ({
@@ -78,6 +127,7 @@ async function switchSession(id: string) {
     refused: m.refused,
     citations: m.citations ?? [],
     streaming: false,
+    created_at: m.created_at,
   }))
   await scrollToBottom()
 }
@@ -101,6 +151,7 @@ async function loadSessions() {
 async function doSend(text: string) {
   const sessionId = activeSessionId.value
   if (!sessionId || sending.value) return
+  const sentAt = new Date().toISOString()
   const userMsg: UiMessage = {
     id: null,
     role: 'user',
@@ -108,6 +159,7 @@ async function doSend(text: string) {
     refused: false,
     citations: [],
     streaming: false,
+    created_at: sentAt,
   }
   // 注意：必须用 reactive 包裹——push 进 ref 数组后若继续修改「原始对象」
   // 不会触发 Vue 渲染（数组内部存的是 proxy），流式内容会全部静默失效
@@ -118,6 +170,7 @@ async function doSend(text: string) {
     refused: false,
     citations: [],
     streaming: true,
+    created_at: sentAt,
   })
   messages.value.push(userMsg, assistantMsg)
   sending.value = true
@@ -158,6 +211,10 @@ async function doSend(text: string) {
       } else if (event.type === 'done') {
         // 冲刷残余缓冲后收尾：回填 id、展开引用、光标消失
         flushFrame()
+        const userEntry = messages.value[messages.value.length - 2]
+        if (userEntry?.role === 'user' && event.userMessageId) {
+          userEntry.id = event.userMessageId
+        }
         assistantMsg.id = event.messageId
         assistantMsg.refused = event.refused
         assistantMsg.streaming = false
@@ -199,16 +256,68 @@ async function retry(index: number) {
 
 // 实现：新建会话并切换到空白消息区
 async function onCreateSession() {
-  if (sending.value) return
+  if (sending.value || deleteMode.value) return
   const session = await createSessionApi()
   sessions.value.unshift(session)
   activeSessionId.value = session.id
   messages.value = []
+  exitDeleteMode()
+}
+
+async function copyMessageContent(content: string) {
+  const text = content.trim()
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制')
+  } catch {
+    ElMessage.error('复制失败')
+  }
+}
+
+function enterDeleteMode(messageId: string | null) {
+  if (sending.value) return
+  if (!messageId) {
+    ElMessage.warning('请等待发送完成后再删除')
+    return
+  }
+  deleteMode.value = true
+  selectedIds.value = expandSelectedIds([messageId])
+}
+
+function onToggleSelect(m: UiMessage, checked: boolean) {
+  if (!m.id) return
+  const next = new Set(selectedIds.value)
+  const { userToAssistant, assistantToUser } = buildPairMaps(messages.value)
+  const partner = userToAssistant.get(m.id) ?? assistantToUser.get(m.id)
+  if (checked) {
+    next.add(m.id)
+    if (partner) next.add(partner)
+  } else {
+    next.delete(m.id)
+    if (partner) next.delete(partner)
+  }
+  selectedIds.value = next
+}
+
+async function confirmDeleteMessages() {
+  const sessionId = activeSessionId.value
+  if (!sessionId || !selectedIds.value.size) return
+  const ids = [...expandSelectedIds(selectedIds.value)]
+  try {
+    await deleteMessagesApi(sessionId, ids)
+    const remove = new Set(ids)
+    messages.value = messages.value.filter((m) => !m.id || !remove.has(m.id))
+    exitDeleteMode()
+    ElMessage.success('已删除')
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : '删除失败')
+  }
 }
 
 // 实现：删除会话——确认后调用接口；激活会话被删时切换到剩余首个会话
 async function onDeleteSession(index: number, id: string) {
-  if (sending.value) return
+  if (sending.value || deleteMode.value) return
   try {
     await ElMessageBox.confirm('删除该会话后对话记录不可恢复，确定删除？', '删除会话', {
       type: 'warning',
@@ -262,7 +371,7 @@ onMounted(() => {
           :key="s.id"
           class="session-item"
           :class="{ active: s.id === activeSessionId }"
-          @click="!sending && switchSession(s.id)"
+          @click="!sending && !deleteMode && switchSession(s.id)"
         >
           <div class="session-main">
             <span class="session-name">会话 {{ sessions.length - i }}</span>
@@ -312,32 +421,93 @@ onMounted(() => {
           v-for="(m, i) in messages"
           :key="m.id ?? `pending-${i}`"
           class="message-row"
-          :class="m.role"
+          :class="[m.role, { 'is-select-mode': deleteMode, 'is-selected': isMessageSelected(m) }]"
         >
-          <div class="bubble" :class="{ refused: m.refused, failed: m.error }">
-            <ElTag v-if="m.refused" type="warning" size="small" class="refuse-tag">
-              未找到相关资料
-            </ElTag>
-            <div v-if="m.content" class="content">
-              {{ m.content }}<span v-if="m.streaming" class="cursor">▍</span>
+          <ElCheckbox
+            v-if="deleteMode"
+            class="msg-check"
+            :model-value="isMessageSelected(m)"
+            :disabled="!m.id"
+            @update:model-value="(v) => onToggleSelect(m, Boolean(v))"
+          />
+          <span v-else class="msg-check-placeholder" aria-hidden="true" />
+          <div class="message-body">
+            <div class="bubble" :class="{ refused: m.refused, failed: m.error }">
+              <ElTag v-if="m.refused" type="warning" size="small" class="refuse-tag">
+                未找到相关资料
+              </ElTag>
+              <div v-if="m.content" class="content">
+                {{ m.content }}<span v-if="m.streaming" class="cursor">▍</span>
+              </div>
+              <div v-if="m.streaming && !m.content" class="typing">正在思考…</div>
+              <div v-if="m.citations.length && !m.streaming && !m.error" class="citations">
+                <CitationCard
+                  v-for="(c, ci) in m.citations"
+                  :key="`${c.chunk_id}-${ci}`"
+                  :citation="c"
+                />
+              </div>
+              <div v-if="m.error" class="error-box">
+                <span class="error-text">{{ m.error }}</span>
+                <ElButton link type="primary" size="small" @click="retry(i)"> 重试 </ElButton>
+              </div>
             </div>
-            <div v-if="m.streaming && !m.content" class="typing">正在思考…</div>
-            <div v-if="m.citations.length && !m.streaming && !m.error" class="citations">
-              <CitationCard
-                v-for="(c, ci) in m.citations"
-                :key="`${c.chunk_id}-${ci}`"
-                :citation="c"
-              />
-            </div>
-            <div v-if="m.error" class="error-box">
-              <span class="error-text">{{ m.error }}</span>
-              <ElButton link type="primary" size="small" @click="retry(i)"> 重试 </ElButton>
+            <div v-if="showMessageMeta(m) && !deleteMode" class="message-meta">
+              <span class="meta-time">{{ formatChatMessageTime(m.created_at) }}</span>
+              <div class="meta-actions">
+                <ElTooltip content="复制" placement="top">
+                  <button
+                    type="button"
+                    class="meta-btn"
+                    :disabled="!m.content"
+                    @click="copyMessageContent(m.content)"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="9" y="9" width="13" height="13" rx="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  </button>
+                </ElTooltip>
+                <ElTooltip v-if="canDeleteMessage(m)" content="删除" placement="top">
+                  <button
+                    type="button"
+                    class="meta-btn meta-btn-danger"
+                    @click="enterDeleteMode(m.id)"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                </ElTooltip>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <footer class="composer">
+      <footer v-if="!deleteMode" class="composer">
         <ElInput
           v-model="input"
           type="textarea"
@@ -354,6 +524,16 @@ onMounted(() => {
           @click="onSubmit"
         >
           发送
+        </ElButton>
+      </footer>
+      <footer v-else class="delete-bar">
+        <ElButton @click="exitDeleteMode">取消</ElButton>
+        <ElButton
+          type="danger"
+          :disabled="!selectedIds.size"
+          @click="confirmDeleteMessages"
+        >
+          删除{{ selectedIds.size ? `（${selectedIds.size}）` : '' }}
         </ElButton>
       </footer>
     </section>
@@ -494,19 +674,119 @@ onMounted(() => {
 
 .message-row {
   display: flex;
+  align-items: flex-start;
+  gap: 8px;
   margin-bottom: 16px;
 }
 
 .message-row.user {
-  justify-content: flex-end;
+  flex-direction: row-reverse;
+}
+
+.message-row.user.is-select-mode {
+  flex-direction: row;
 }
 
 .message-row.assistant {
-  justify-content: flex-start;
+  flex-direction: row;
+}
+
+.message-row.user.is-select-mode .message-body {
+  align-items: flex-start;
+}
+
+.message-row.is-select-mode.is-selected .message-body .bubble {
+  outline: 1px solid var(--dt-color-primary);
+  outline-offset: 2px;
+}
+
+.msg-check {
+  flex-shrink: 0;
+  margin-top: 10px;
+}
+
+.msg-check-placeholder {
+  flex-shrink: 0;
+  width: 0;
+}
+
+.message-body {
+  display: flex;
+  flex-direction: column;
+  max-width: 72%;
+  min-width: 0;
+}
+
+.message-row.user .message-body {
+  align-items: flex-end;
+}
+
+.message-row.assistant .message-body {
+  align-items: flex-start;
+}
+
+.message-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 0 2px;
+  font-size: 12px;
+  color: var(--dt-text-secondary);
+}
+
+.meta-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.message-body:hover .meta-actions,
+.message-meta:focus-within .meta-actions {
+  opacity: 1;
+}
+
+.meta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--dt-text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.meta-btn:hover:not(:disabled) {
+  color: var(--dt-text);
+  background: var(--dt-bg-page);
+}
+
+.meta-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.meta-btn-danger:hover:not(:disabled) {
+  color: var(--el-color-danger);
+}
+
+.delete-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px 16px;
+  border-top: 1px solid var(--dt-border);
+  box-sizing: border-box;
 }
 
 .bubble {
-  max-width: 72%;
+  width: 100%;
   padding: 10px 14px;
   border-radius: 10px;
   background: var(--dt-bg-page);

@@ -73,3 +73,11 @@ export function sendMessageStreamApi(
 export function deleteSessionApi(sessionId: string) {
   return request.delete<unknown, unknown>(`/api/v1/chat/sessions/${sessionId}`)
 }
+
+// 实现：批量删除消息（后端按一轮对话成对扩展）
+export function deleteMessagesApi(sessionId: string, messageIds: string[]) {
+  return request.delete<unknown, { deleted_count: number }>(
+    `/api/v1/chat/sessions/${sessionId}/messages`,
+    { data: { message_ids: messageIds } },
+  )
+}

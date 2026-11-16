@@ -75,7 +75,8 @@ web/
 - 路由注册在 `routes/ai_ext`，`meta.permission: 'agent:chat'`；侧边栏菜单项按 `hasPermission('agent:chat')` 显隐，禁止比较角色 code。
 - 页面分会话区与消息区：会话区用 `GET /chat/sessions`（统一分页结构）列出当前用户会话，支持新建与切换；消息区渲染历史（`GET /chat/sessions/{id}/messages`），发送后流式追加。
 - 引用卡片（`components/ai_ext`）展示 `doc_title`、`location`（md 标题 / pdf 页码 / office 位置的可读文案）、`snippet`。`refused` 的助手消息用明确样式（提示图标 + 文案）与普通回答区分。
-- 流式期间：`citation` 先建引用卡片骨架，`delta` 逐段追加，`done` 收尾拿到 message_id，`error` 展示错误并允许重试；发送中禁止再次发送。
+- 流式期间：`citation` 先建引用卡片骨架，`delta` 逐段追加，`done` 收尾拿到 `message_id` 与 `user_message_id`，`error` 展示错误并允许重试；发送中禁止再次发送。
+- 消息区：每条展示本地时间（`YYYY.MM.DD HH:mm`）、复制纯文本 `content`、删除进入多选模式（成对勾选问/答）；底部切换为取消/批量删除。
 - 接口函数全部放 `src/api`（`api/ai_ext/chat.ts`）；SSE 读取统一走 `utils/sse.ts`，组件只消费已经解析好的 `delta`、`citation`、`done`、`error` 四种事件。
 
 SSE 的读取放在 `utils/sse.ts`。组件只消费已经解析好的 `delta`、`citation`、`done`、`error`。
