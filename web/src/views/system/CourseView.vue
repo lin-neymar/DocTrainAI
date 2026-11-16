@@ -190,11 +190,14 @@ function asCourse(row: unknown): CourseItem {
 
 function deptLabel(row: unknown) {
   const c = asCourse(row)
-  return deptNameMap.value[c.dept_id] || c.dept_id.slice(0, 8)
+  return c.dept_name || deptNameMap.value[c.dept_id] || c.dept_id.slice(0, 8)
 }
 
 function audienceLabel(row: unknown) {
-  const ids = asCourse(row).audience_dept_ids ?? []
+  const c = asCourse(row)
+  const names = c.audience_dept_names
+  if (names && names.length) return names.join('、')
+  const ids = c.audience_dept_ids ?? []
   if (!ids.length) return '—'
   return ids.map((id) => deptNameMap.value[id] || id.slice(0, 8)).join('、')
 }

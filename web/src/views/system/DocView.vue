@@ -316,11 +316,14 @@ function asDoc(row: unknown): DocItem {
 
 function deptLabel(row: unknown) {
   const d = asDoc(row)
-  return deptNameMap.value[d.dept_id] || d.dept_id.slice(0, 8)
+  return d.dept_name || deptNameMap.value[d.dept_id] || d.dept_id.slice(0, 8)
 }
 
 function audienceLabel(row: unknown) {
-  const ids = asDoc(row).audience_dept_ids ?? []
+  const d = asDoc(row)
+  const names = d.audience_dept_names
+  if (names && names.length) return names.join('、')
+  const ids = d.audience_dept_ids ?? []
   if (!ids.length) return '—'
   return ids.map((id) => deptNameMap.value[id] || id.slice(0, 8)).join('、')
 }

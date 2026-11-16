@@ -11,7 +11,11 @@ export interface CourseItem {
   title: string
   description: string | null
   dept_id: string
+  /** 归属部门名称（后端解析，跨数据范围时也能显示中文） */
+  dept_name?: string
   audience_dept_ids?: string[]
+  /** 可见组织名称列表（与 audience_dept_ids 同序） */
+  audience_dept_names?: string[]
   doc_ids: string[]
   created_at?: string
   updated_at?: string
