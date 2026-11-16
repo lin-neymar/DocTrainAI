@@ -5,7 +5,16 @@
  * error 展示错误并可重试；发送中禁止再次发送与切换会话。
  */
 import { nextTick, onMounted, reactive, ref } from 'vue'
-import { ElButton, ElCheckbox, ElEmpty, ElInput, ElMessage, ElMessageBox, ElTag, ElTooltip } from 'element-plus'
+import {
+  ElButton,
+  ElCheckbox,
+  ElEmpty,
+  ElInput,
+  ElMessage,
+  ElMessageBox,
+  ElTag,
+  ElTooltip,
+} from 'element-plus'
 
 import {
   createSessionApi,
@@ -499,11 +508,7 @@ onMounted(() => {
       </footer>
       <footer v-else class="delete-bar">
         <ElButton @click="exitDeleteMode">取消</ElButton>
-        <ElButton
-          type="danger"
-          :disabled="!selectedIds.size"
-          @click="confirmDeleteMessages"
-        >
+        <ElButton type="danger" :disabled="!selectedIds.size" @click="confirmDeleteMessages">
           删除{{ selectedIds.size ? `（${selectedIds.size}）` : '' }}
         </ElButton>
       </footer>
