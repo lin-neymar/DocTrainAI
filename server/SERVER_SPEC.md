@@ -65,7 +65,7 @@ ORM 使用 `Mapped` 和 `mapped_column`。业务查询放在 service，不放在
 - 用户：恰好一个 `dept_id`，密码只存 bcrypt 哈希。软删除后不能登录。用户名在未删除记录中唯一。可选字段：`theme_primary`（个人主题主色，如 `#1F4B7A`；空则前端用默认色）。
 - 角色与用户多对多。角色与权限码多对多。
 - 权限码是字符串，种子脚本写入，业务代码从数据库读取，不在判断处手写第二份清单。
-- 文档：归属一个部门（`dept_id`）。另有可见组织关联表（如 `doc_audience_dept`）：多行 `dept_id`，每行表示该节点**子树**可读。字段限于身份与文件元数据：标题、归属部门、原始文件名、扩展名、大小、**原件 `storage_key`**、可选 **`preview_storage_key`**（预览用 PDF 等）、sha256、上传人、时间、软删除。不含解析状态、正文、向量。
+- 文档：归属一个部门（`dept_id`）。另有可见组织关联表（如 `doc_audience_dept`）：多行 `dept_id`，每行表示该节点**子树**可读。字段限于身份与文件元数据：标题、归属部门、原始文件名、扩展名、大小、**原件 `storage_key`**、可选 **`preview_storage_key`**（预览用 PDF 等）、sha256、上传人、时间、软删除。不含解析状态、正文、向量。列表/详情响应额外附 `dept_name` 与 `audience_dept_names`（后端解析，与 id 同序），供跨数据范围展示中文名（部门树接口仅返回当前用户范围内节点）。
 - 课程：归属一个部门，与文档多对多；同样有 `course_audience_dept`。删除课程不删除文档。课程链接不改变文档的可见性。
 - 系统品牌（全局一行或键值）：显示名、登录副文案、Logo 存储键。不含主题色（主题色在用户个人字段）。
 - **存储抽象 `StorageBackend`**：`put` / `open`（或 read）/ `delete` / `exists`；业务与阶段 2 worker 只依赖该接口与 `storage_key`。阶段 1 实现 **Local**（根目录 `FILE_STORAGE_DIR`）。`.env` 可预留 `STORAGE_BACKEND=local|s3` 与 `S3_*`，阶段 1 **禁止**实现 S3 客户端。软删除业务行不立即删除存储对象。
