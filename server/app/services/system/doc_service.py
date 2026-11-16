@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session  # 数据库会话
 from app.core.exceptions import NotFoundError, ValidationFailedError  # 异常
 from app.models.system.dept import Dept  # 部门模型
 from app.models.system.doc import Doc, DocAudienceDept  # 文档模型
-from app.services.system import scope_service  # 范围服务
+from app.services.system import dept_service, scope_service  # 部门名解析 / 范围服务
 from app.storage import get_storage  # 存储服务
 from app.utils import files as file_utils  # 文件工具
 from app.utils.office_preview import OFFICE_EXTENSIONS, convert_office_to_pdf  # Office预览
@@ -64,13 +64,21 @@ def _preview_ready(doc: Doc) -> bool:
     return bool(key and get_storage().exists(key))
 
 
-# 实现：文档元数据转响应 dict（含 audience；不含磁盘绝对路径/存储键）
+# 实现：文档元数据转响应 dict（含 audience 与跨范围部门名；不含磁盘绝对路径/存储键）
 def _to_dict(session: Session, doc: Doc) -> dict:
+    audience_ids = _audience_dept_ids(session, doc.id)
+    name_map = dept_service.resolve_dept_names(
+        session, [doc.dept_id, *[uuid.UUID(i) for i in audience_ids]]
+    )
     return {
         "id": str(doc.id),
         "title": doc.title,
         "dept_id": str(doc.dept_id),
-        "audience_dept_ids": _audience_dept_ids(session, doc.id),
+        "dept_name": name_map.get(str(doc.dept_id), str(doc.dept_id)),
+        "audience_dept_ids": audience_ids,
+        "audience_dept_names": [
+            name_map.get(dept_id, dept_id) for dept_id in audience_ids
+        ],
         "original_filename": doc.original_filename,
         "extension": doc.extension,
         "size_bytes": doc.size_bytes,

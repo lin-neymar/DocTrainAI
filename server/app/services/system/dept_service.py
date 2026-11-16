@@ -27,6 +27,19 @@ def _to_dict(dept: Dept) -> dict:
     }
 
 
+# 实现：批量解析部门名称（不过滤软删，找不到回退 id 字符串）
+# 用途：文档/课程列表跨数据范围展示归属与可见组织名称，避免前端树范围裁剪后显示 id
+def resolve_dept_names(
+    session: Session, dept_ids: list[uuid.UUID]
+) -> dict[str, str]:
+    if not dept_ids:
+        return {}
+    rows = session.execute(
+        select(Dept.id, Dept.name).where(Dept.id.in_(dept_ids))
+    ).all()
+    return {str(did): (name or str(did)) for did, name in rows}
+
+
 # 实现：取用户可访问部门 id 集合
 def _accessible_set(session: Session, user_id: uuid.UUID) -> set[uuid.UUID]:
     return set(scope_service.get_accessible_dept_ids(session, user_id))

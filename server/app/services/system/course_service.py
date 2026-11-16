@@ -16,7 +16,7 @@ from app.core.exceptions import NotFoundError, ValidationFailedError
 from app.models.system.course import Course, CourseAudienceDept, CourseDoc
 from app.models.system.dept import Dept
 from app.models.system.doc import Doc
-from app.services.system import scope_service
+from app.services.system import dept_service, scope_service
 from app.utils.pagination import page_offset
 
 
@@ -41,14 +41,22 @@ def _audience_dept_ids(session: Session, course_id: uuid.UUID) -> list[str]:
     return [str(d) for d in rows]
 
 
-# 实现：课程转响应 dict（含 doc_ids、audience_dept_ids）
+# 实现：课程转响应 dict（含 doc_ids、audience 与跨范围部门名）
 def _to_dict(session: Session, course: Course) -> dict:
+    audience_ids = _audience_dept_ids(session, course.id)
+    name_map = dept_service.resolve_dept_names(
+        session, [course.dept_id, *[uuid.UUID(i) for i in audience_ids]]
+    )
     return {
         "id": str(course.id),
         "title": course.title,
         "description": course.description,
         "dept_id": str(course.dept_id),
-        "audience_dept_ids": _audience_dept_ids(session, course.id),
+        "dept_name": name_map.get(str(course.dept_id), str(course.dept_id)),
+        "audience_dept_ids": audience_ids,
+        "audience_dept_names": [
+            name_map.get(dept_id, dept_id) for dept_id in audience_ids
+        ],
         "doc_ids": [str(did) for did in _doc_ids_of(session, course.id)],
         "created_at": course.created_at.isoformat() if course.created_at else None,
         "updated_at": course.updated_at.isoformat() if course.updated_at else None,
