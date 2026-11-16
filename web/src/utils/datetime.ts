@@ -1,16 +1,11 @@
 /**
- * 将后端 timestamptz / ISO 字符串格式化为列表展示用文案。
- * 例：2026-10-31T09:20:19.873188+00:00 → 2026-10-31 09:20:19
+ * 将后端 timestamptz / ISO 字符串格式化为列表展示用文案（浏览器本地时区）。
+ * 例：2026-11-16T09:20:19.873188+00:00 → 2026-11-16 17:20:19（UTC+8）
  */
 
-// 实现：统一时间展示格式 YYYY-MM-DD HH:mm:ss
 export function formatDateTime(value?: string | null): string {
   if (!value) return '—'
-  const matched = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/.exec(value.trim())
-  if (matched) {
-    return `${matched[1]} ${matched[2]}`
-  }
-  const date = new Date(value)
+  const date = new Date(value.trim())
   if (Number.isNaN(date.getTime())) return value
   const pad = (n: number) => String(n).padStart(2, '0')
   return (
