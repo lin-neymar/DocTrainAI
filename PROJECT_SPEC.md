@@ -41,7 +41,7 @@
 2. 异常在全局处理器里转换成统一响应。业务拒绝、参数错误、服务故障分开，不把预期内的拒绝记成未处理异常。
 3. 相同逻辑复用已有服务和前端工具，不复制一份新的实现。
 4. 功能在分支上开发。`main` 保持可启动。
-5. 日志按级别输出。阶段 4 再统一成结构化格式，并带上请求标识。
+5. 日志统一结构化输出（LOG_FORMAT 可配 text/json），API 带 request_id、worker 带 job_id。
 
 ## ⚫ MUST NOT
 
@@ -61,4 +61,4 @@
 - 前端检查：Prettier、ESLint
 - 迁移：Alembic
 - 编排：Docker Compose，文件名为仓库根目录的 `compose.yaml`
-- CI/CD：Jenkins（自建构建机 + 声明式流水线），阶段 4 实现
+- CI/CD：Jenkins（自建构建机 + 声明式流水线，Gitee webhook 触发 + ACR 双 tag + 滚动部署）
